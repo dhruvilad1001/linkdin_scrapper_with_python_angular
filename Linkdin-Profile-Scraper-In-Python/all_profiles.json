@@ -1,0 +1,90 @@
+[
+  {
+    "url": "https://www.linkedin.com/in/rohitdoshi9/",
+    "name": "Rohit Doshi",
+    "headline": "Sr. Software Engineer at Amazon | Ex-Goldman Sachs, Barclays | 50K+ LinkedIn | PICT | BITS Pilani |",
+    "about": "Hi, I'm Rohit Doshi 👋An innovative thinker and enthusiastic software developer with a passion for dancing ! ⭐ 🕺🏻I possess clear understanding of fundamentals and operational activities in below technical skills :-> Java-> MySQL, MongoDB-> Microservices, Multi-tier Architectures-> AWS, Kubernetes, KafkaI have also received professional training in AWS, Machine Learning, and Data Science ✔️My technical expertise and problem-solving skills make me an asset to any team 🤝I often talk on LinkedIn with topics related to my skillset 🔊I enjoy sharing my knowledge and experience with others, and I'm always happy to mentor students and early-career professionals 🤝When I'm not coding, you'll find me pursuing my passion for dance 🕺🏻, which I share on Instagram - @rohit_doshi_9 📷New threads profile - https://www.threads.net/@rohit_doshi_9Thank you for taking the time to read about me 😄If you're interested in connecting or exploring potential collaborations or brand partnerships, don't hesitate to reach out through DM 📩I'm eager to contribute my skills and expertise to help organizations and individuals succeed 🚀NOTE - All opinions posted are of my own and not of my employer!Hi, I'm Rohit Doshi 👋\n\nAn innovative thinker and enthusiastic software developer with a passion for dancing ! ⭐ 🕺🏻\n\nI possess clear understanding of fundamentals and operational activities in below technical skills :\n-> Java\n-> MySQL, MongoDB\n-> Microservices, Multi-tier Architectures\n-> AWS, Kubernetes, Kafka\n\nI have also received professional training in AWS, Machine Learning, and Data Science ✔️\n\nMy technical expertise and problem-solving skills make me an asset to any team 🤝\n\nI often talk on LinkedIn with topics related to my skillset 🔊\n\nI enjoy sharing my knowledge and experience with others, and I'm always happy to mentor students and early-career professionals 🤝\n\nWhen I'm not coding, you'll find me pursuing my passion for dance 🕺🏻, which I share on Instagram - @rohit_doshi_9 📷\n\nNew threads profile - https://www.threads.net/@rohit_doshi_9\n\nThank you for taking the time to read about me 😄\n\nIf you're interested in connecting or exploring potential collaborations or brand partnerships, don't hesitate to reach out through DM 📩\n\nI'm eager to contribute my skills and expertise to help organizations and individuals succeed 🚀\n\nNOTE - All opinions posted are of my own and not of my employer!",
+    "experience": [
+      {
+        "company_name": "Amazon",
+        "designation": "Software Engineer(L5)",
+        "duration": "Jul 2025 to Present · 5 mos",
+        "location": "Pune, Maharashtra, India · On-site"
+      },
+      {
+        "company_name": "",
+        "designation": "Goldman Sachs",
+        "duration": "Full-time · 3 yrs 7 mos",
+        "location": ""
+      },
+      {
+        "company_name": "",
+        "designation": "Software Engineer (Vice President)",
+        "duration": "Jan 2025 to Jul 2025 · 7 mos",
+        "location": "Bengaluru, Karnataka, India · On-site"
+      },
+      {
+        "company_name": "",
+        "designation": "Software Engineer (Associate)",
+        "duration": "Dec 2022 to Dec 2024 · 2 yrs 1 mo",
+        "location": "Bengaluru, Karnataka, India · On-site"
+      },
+      {
+        "company_name": "",
+        "designation": "Software Engineer (Senior Analyst)",
+        "duration": "Jan 2022 to Dec 2022 · 1 yr",
+        "location": ""
+      },
+      {
+        "company_name": "",
+        "designation": "Bengaluru",
+        "duration": "",
+        "location": "• Worked for migration of regulatory applications to a multi-tenant architecture using scalable and distributed platforms like Kubernetes, Kafka and AWS S3. \n• Responsibilities include - \n=>Preparing solutions by determining and designing system specifications, standards, and programming.\n=>Coordinating cross-team communications for effective collaboration.\n=>Creating and designing implementation plans for application."
+      },
+      {
+        "company_name": "",
+        "designation": "Barclays",
+        "duration": "Full-time · 2 yrs 7 mos",
+        "location": "Pune, Maharashtra, India"
+      },
+      {
+        "company_name": "",
+        "designation": "Developer",
+        "duration": "Aug 2020 to Jan 2022 · 1 yr 6 mos",
+        "location": "Experience with deployment and testing of microservices, handling the operational complexity of microservices. \nEffectively coded software changes and alterations based on specific design specifications. \nExtensive experience using and developing APIs.\nExperience with AWS cloud deployments and infrastructure design. \nWorked well independently and on a team to solve problems."
+      },
+      {
+        "company_name": "",
+        "designation": "Graduate Analyst",
+        "duration": "Jul 2019 to Aug 2020 · 1 yr 2 mos",
+        "location": ""
+      },
+      {
+        "company_name": "",
+        "designation": "BMC Software · Internship",
+        "duration": "Sep 2018 to Apr 2019 · 8 mos",
+        "location": "Pune Area, India"
+      }
+    ],
+    "education": [
+      {
+        "college": "Pune Institute of Computer Technology",
+        "degree": "Bachelor of Engineering, Computer Engineering",
+        "duration": "2015 - 2019",
+        "grade": "Grade: 8.59 CGPA"
+      },
+      {
+        "college": "BITS Pilani Work Integrated Learning Programmes",
+        "degree": "Master of Technology - MTech, Software Engineering",
+        "duration": "Jul 2022 - Jun 2024",
+        "grade": "Skills:Kubernetes · Software Design · Cross-team Collaboration · Software Project Management · Software Architecture · Microservices · Problem Solving · SQL · Project Management · Spring Boot · Apache Kafka · Databases · Java · Python (Programming Language) · C++ · MySQL"
+      },
+      {
+        "college": "Deogiri College Chh. Sambhaji Nagar",
+        "degree": "2013 - 2015",
+        "duration": "Completed Senior Secondary education with Computer Science as vocational subject.",
+        "grade": "Skills:Problem Solving · SQL · Databases · Java · Python (Programming Language) · C++ · MySQL"
+      }
+    ]
+  }
+]

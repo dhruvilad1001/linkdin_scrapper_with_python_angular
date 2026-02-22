@@ -1,0 +1,3677 @@
+#------- app.py
+f
+rom flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, flash, session
+from pymongo import MongoClient
+import pandas as pd
+from datetime import datetime, timedelta
+import os
+import json
+import subprocess
+import threading
+from werkzeug.utils import secure_filename
+import re
+from typing import Dict, List, Any
+import logging
+from bson import ObjectId
+from dotenv import load_dotenv
+
+# Import the actual scraper runner
+from scraper_runner import run_linkedin_scraper
+
+# Load environment variables
+load_dotenv()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY', 'your-secret-key-change-in-production')
+app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+
+# MongoDB Configuration from .env file
+MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
+DATABASE_NAME = os.getenv('DATABASE_NAME', 'Linkedin')
+COLLECTION_NAME = os.getenv('COLLECTION_NAME', 'profile_data')
+
+# Initialize MongoDB connection
+try:
+    client = MongoClient(MONGO_URI)
+    db = client[DATABASE_NAME]
+    collection = db[COLLECTION_NAME]
+    client.admin.command('ping')
+    logger.info("MongoDB connection established successfully")
+except Exception as e:
+    logger.error(f"Failed to connect to MongoDB: {e}")
+    client = None
+    db = None
+    collection = None
+
+# Ensure directories exist
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+os.makedirs('exports', exist_ok=True)
+os.makedirs('templates', exist_ok=True)
+
+class ProfileManager:
+    """Handles all profile-related database operations"""
+    
+    def __init__(self, collection):
+        self.collection = collection
+    
+    def get_all_profiles(self, limit=50, skip=0):
+        """Get all profiles with pagination"""
+        try:
+            if self.collection is None:
+                return []
+                
+            profiles = list(self.collection.find({}, {
+                'name': 1, 'headline': 1, 'url': 1, 'last_updated': 1,
+                'experience': {'$slice': 1}, 'education': {'$slice': 1}
+            }).sort('last_updated', -1).skip(skip).limit(limit))
+            
+            for profile in profiles:
+                profile['_id'] = str(profile['_id'])
+                if 'last_updated' in profile and profile['last_updated']:
+                    if isinstance(profile['last_updated'], datetime):
+                        profile['last_updated'] = profile['last_updated'].strftime('%Y-%m-%d %H:%M:%S')
+            
+            return profiles
+        except Exception as e:
+            logger.error(f"Error fetching profiles: {e}")
+            return []
+    
+    def get_profile_by_id(self, profile_id):
+        """Get detailed profile by ID"""
+        try:
+            if self.collection is None:
+                return None
+                
+            profile = self.collection.find_one({'_id': ObjectId(profile_id)})
+            if profile:
+                profile['_id'] = str(profile['_id'])
+                if 'last_updated' in profile and profile['last_updated']:
+                    if isinstance(profile['last_updated'], datetime):
+                        profile['last_updated'] = profile['last_updated'].strftime('%Y-%m-%d %H:%M:%S')
+            return profile
+        except Exception as e:
+            logger.error(f"Error fetching profile {profile_id}: {e}")
+            return None
+    
+    def search_profiles(self, query, limit=20):
+        """Search profiles by name, headline, company, or college..."""
+        try:
+            if self.collection is None:
+                return []
+                
+            search_filter = {
+                '$or': [
+                    {'name': {'$regex': query, '$options': 'i'}},
+                    {'headline': {'$regex': query, '$options': 'i'}},
+                    {'experience.company_name': {'$regex': query, '$options': 'i'}},    
+                    {'education.college': {'$regex': query, '$options': 'i'}},
+                    # {'education.degree': {'$regex': query, '$options': 'i'}}
+                ]
+            }
+            
+            profiles = list(self.collection.find(search_filter, {
+                'name': 1, 'headline': 1, 'url': 1, 'last_updated': 1, 'experience': 1, 'education': 1
+            }).limit(limit))
+            
+            for profile in profiles:
+                profile['_id'] = str(profile['_id'])
+            
+            return profiles
+        except Exception as e:
+            logger.error(f"Error searching profiles: {e}")
+            return []
+    
+    def get_statistics(self):
+        """Get database statistics"""
+        try:
+            if self.collection is None:
+                return {'total_profiles': 0, 'today_profiles': 0, 'top_companies': [], 'top_schools': []}
+                
+            total_profiles = self.collection.count_documents({})
+            
+            today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            today_profiles = self.collection.count_documents({
+                'last_updated': {'$gte': today_start}
+            })
+            
+            company_pipeline = [
+                {'$unwind': '$experience'},
+                {'$group': {'_id': '$experience.company_name', 'count': {'$sum': 1}}},
+                {'$sort': {'count': -1}},
+                {'$limit': 10}
+            ]
+            top_companies = list(self.collection.aggregate(company_pipeline))
+            
+            education_pipeline = [
+                {'$unwind': '$education'},
+                {'$group': {'_id': '$education.college', 'count': {'$sum': 1}}},
+                {'$sort': {'count': -1}},
+                {'$limit': 10}
+            ]
+            top_schools = list(self.collection.aggregate(education_pipeline))
+            
+            return {
+                'total_profiles': total_profiles,
+                'today_profiles': today_profiles,
+                'top_companies': top_companies,
+                'top_schools': top_schools
+            }
+        except Exception as e:
+            logger.error(f"Error getting statistics: {e}")
+            return {'total_profiles': 0, 'today_profiles': 0, 'top_companies': [], 'top_schools': []}
+    
+    def delete_profile(self, profile_id):
+        """Delete a profile by ID"""
+        try:
+            if self.collection is None:
+                return False
+                
+            result = self.collection.delete_one({'_id': ObjectId(profile_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            logger.error(f"Error deleting profile {profile_id}: {e}")
+            return False
+
+class ScrapingManager:
+    """Handles scraping operations"""
+    
+    @staticmethod
+    def validate_linkedin_url(url):
+        """Validate if URL is a valid LinkedIn profile URL"""
+        pattern = r'^https:\/\/www\.linkedin\.com\/in\/[a-zA-Z0-9\-]+\/?$'
+        return re.match(pattern, url) is not None
+    
+    @staticmethod
+    def run_scraper(url):
+        """Run the actual scraper for a given URL"""
+        try:
+            result = run_linkedin_scraper(url)
+            if isinstance(result, tuple) and len(result) >= 2:
+                success, message = result[0], result[1]
+            elif isinstance(result, bool):
+                success, message = result, 'OK' if result else 'Failed'
+            else:
+                success, message = False, f'Unexpected scraper return: {repr(result)}'
+            return success, message
+        except Exception as e:
+            logger.error(f"run_scraper exception: {e}")
+            return False, str(e)
+
+class ExportManager:
+    """Handles data export operations with proper formatting"""
+    
+    def __init__(self, collection):
+        self.collection = collection
+    
+    def clean_text(self, text):
+        """Clean text data"""
+        if text is None:
+            return ""
+        s = str(text)
+        replacements = {
+            'Â·': '·', '·': '-', '•': '•', '\xa0': ' ', '\u200b': '',
+            '\r\n': ' ', '\r': ' ', '\n': ' '
+        }
+        for k, v in replacements.items():
+            s = s.replace(k, v)
+        s = re.sub(r'[\x00-\x1F\x7F]+', ' ', s)
+        s = re.sub(r'\s+', ' ', s).strip()
+        return s
+    
+    def extract_dates(self, duration_str):
+        """Extract dates from duration string"""
+        if not duration_str:
+            return {"duration": "", "start_date": "", "end_date": "", "duration_months": ""}
+        
+        s = self.clean_text(duration_str)
+        pattern = r'(\w{3}\s+\d{4})\s+to\s+((?:\w{3}\s+\d{4})|Present)\s*·?\s*(.+)?'
+        match = re.search(pattern, s, re.IGNORECASE)
+        
+        if match:
+            duration_text = self.clean_text(match.group(3) or "")
+            duration_months = self.convert_duration_to_months(duration_text)
+            
+            return {
+                "start_date": match.group(1),
+                "end_date": match.group(2),
+                "duration": duration_text,
+                "duration_months": duration_months
+            }
+        
+        # If no match, try to extract duration directly
+        duration_months = self.convert_duration_to_months(s)
+        return {"duration": s, "start_date": "", "end_date": "", "duration_months": duration_months}
+    
+    def convert_duration_to_months(self, duration_str):
+        """Convert duration string to total months"""
+        if not duration_str:
+            return ""
+        
+        s = duration_str.lower()
+        total_months = 0
+        
+        # Extract years
+        year_match = re.search(r'(\d+)\s*yr', s)
+        if year_match:
+            total_months += int(year_match.group(1)) * 12
+        
+        # Extract months
+        month_match = re.search(r'(\d+)\s*mo', s)
+        if month_match:
+            total_months += int(month_match.group(1))
+        
+        return str(total_months) if total_months > 0 else ""
+    
+    def extract_location(self, location_str):
+        """Extract location details"""
+        if not location_str:
+            return {"city": "", "state": "", "country": "", "work_mode": ""}
+        
+        s = self.clean_text(location_str)
+        work_mode = ""
+        
+        for mode in ["Remote", "On-site", "Hybrid", "Onsite"]:
+            if mode.lower() in s.lower():
+                work_mode = mode
+                s = s.replace(mode, "").strip()
+        
+        s = re.sub(r'\s*·\s*', '', s).strip()
+        parts = [p.strip() for p in s.split(',') if p.strip()]
+        
+        return {
+            "city": parts[0] if len(parts) > 0 else "",
+            "state": parts[1] if len(parts) > 1 else "",
+            "country": parts[2] if len(parts) > 2 else (parts[-1] if parts else ""),
+            "work_mode": work_mode
+        }
+    
+    def export_to_excel(self, format_type='grouped', filters=None):
+        """Export profiles to Excel with proper formatting"""
+        try:
+            if self.collection is None:
+                return None, "Database not connected"
+            
+            query = filters if filters else {}
+            profiles = list(self.collection.find(query))
+            
+            if not profiles:
+                return None, "No profiles found to export"
+            
+            if format_type == 'grouped':
+                return self._export_grouped_format(profiles)
+            else:
+                return self._export_flat_format(profiles)
+                
+        except Exception as e:
+            logger.error(f"Error exporting to Excel: {e}")
+            return None, str(e)
+    
+    def _export_grouped_format(self, profiles):
+        """Export in grouped format with proper structure"""
+        try:
+            filename = f"linkedin_profiles_grouped_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            filepath = os.path.join('exports', filename)
+            
+            basic_data = []
+            exp_data = []
+            edu_data = []
+            proj_data = []
+            cert_data = []
+            awards_data = []
+            courses_data = []
+            
+            for profile in profiles:
+                name = self.clean_text(profile.get('name', ''))
+                url = self.clean_text(profile.get('url', ''))
+                
+                # Basic Info - includes URL
+                basic_data.append({
+                    'name': name,
+                    'url': url,
+                    'headline': self.clean_text(profile.get('headline', '')),
+                    'about': self.clean_text(profile.get('about', ''))[:500],
+                    'last_updated': profile.get('last_updated', '')
+                })
+                
+                # Experience - no URL, name only for first record
+                experiences = profile.get('experience', [])
+                for idx, exp in enumerate(experiences):
+                    dates = self.extract_dates(exp.get('duration', ''))
+                    location = self.extract_location(exp.get('location', ''))
+                    
+                    exp_data.append({
+                        'name': name if idx == 0 else '',  # Name only for first record
+                        'company_name': self.clean_text(exp.get('company_name', '')),
+                        'designation': self.clean_text(exp.get('designation', '')),
+                        'employment_type': self.clean_text(exp.get('role', '')),
+                        'duration_months': dates['duration_months'],
+                        'start_date': dates['start_date'],
+                        'end_date': dates['end_date'],
+                        'city': location['city'],
+                        'state': location['state'],
+                        'country': location['country'],
+                        'work_mode': location['work_mode']
+                    })
+                
+                # Education - no URL, name only for first record
+                educations = profile.get('education', [])
+                for idx, edu in enumerate(educations):
+                    dates = self.extract_dates(edu.get('duration', ''))
+                    
+                    edu_data.append({
+                        'name': name if idx == 0 else '',  # Name only for first record
+                        'college': self.clean_text(edu.get('college', '')),
+                        'degree': self.clean_text(edu.get('degree', '')),
+                        'duration': dates['duration'],
+                        'start_date': dates['start_date'],
+                        'end_date': dates['end_date'],
+                        'grade': self.clean_text(edu.get('grade', ''))
+                    })
+                
+                # Projects - no URL, name only for first record
+                projects = profile.get('projects', [])
+                for idx, proj in enumerate(projects):
+                    dates = self.extract_dates(proj.get('duration', ''))
+                    
+                    proj_data.append({
+                        'name': name if idx == 0 else '',  # Name only for first record
+                        'project_name': self.clean_text(proj.get('project_name', '')),
+                        'duration': dates['duration'],
+                        'start_date': dates['start_date'],
+                        'end_date': dates['end_date'],
+                        'description': self.clean_text(proj.get('description', ''))[:200],
+                        'skills': self.clean_text(proj.get('skills', ''))
+                    })
+                
+                # Certifications - no URL, name only for first record
+                licenses = profile.get('licenses', [])
+                for idx, cert in enumerate(licenses):
+                    issued = self.clean_text(cert.get('issued_date', ''))
+                    match = re.search(r'Issued\s+(\w{3}\s+\d{4})', issued)
+                    issued_clean = match.group(1) if match else issued
+                    
+                    cert_data.append({
+                        'name': name if idx == 0 else '',  # Name only for first record
+                        'certification_name': self.clean_text(cert.get('name', '')),
+                        'issuing_organization': self.clean_text(cert.get('institute', '')),
+                        'issue_date': issued_clean
+                    })
+                
+                # Awards - no URL, name only for first record
+                awards = profile.get('honors_awards', [])
+                for idx, award in enumerate(awards):
+                    awards_data.append({
+                        'name': name if idx == 0 else '',  # Name only for first record
+                        'award_name': self.clean_text(award.get('award_name', '')),
+                        'issued_by': self.clean_text(award.get('issued_by', '')),
+                        'issue_date': self.clean_text(award.get('issued_date', '')),
+                        'associated_with': self.clean_text(award.get('associated_with', ''))
+                    })
+                
+                # Courses - no URL, name only for first record
+                courses = profile.get('courses', [])
+                for idx, course in enumerate(courses):
+                    courses_data.append({
+                        'name': name if idx == 0 else '',  # Name only for first record
+                        'course_name': self.clean_text(course.get('course_name', '')),
+                        'associated_with': self.clean_text(course.get('associated_with', ''))
+                    })
+            
+            # Write to Excel
+            with pd.ExcelWriter(filepath, engine='xlsxwriter') as writer:
+                workbook = writer.book
+                
+                header_format = workbook.add_format({
+                    'bold': True,
+                    'bg_color': '#4472C4',
+                    'font_color': 'white',
+                    'border': 1
+                })
+                
+                # Basic Info Sheet (with URL)
+                if basic_data:
+                    df = pd.DataFrame(basic_data)
+                    df.to_excel(writer, sheet_name='Basic_Info', index=False)
+                    ws = writer.sheets['Basic_Info']
+                    for col_num, value in enumerate(df.columns.values):
+                        ws.write(0, col_num, value, header_format)
+                    ws.set_column('A:A', 25)
+                    ws.set_column('B:B', 40)
+                    ws.set_column('C:C', 50)
+                    ws.set_column('D:D', 60)
+                
+                # Experience Sheet (no URL)
+                if exp_data:
+                    df = pd.DataFrame(exp_data)
+                    df.to_excel(writer, sheet_name='Experience', index=False)
+                    ws = writer.sheets['Experience']
+                    for col_num, value in enumerate(df.columns.values):
+                        ws.write(0, col_num, value, header_format)
+                    ws.set_column('A:A', 20)
+                    ws.set_column('B:B', 30)
+                    ws.set_column('C:C', 35)
+                    ws.set_column('D:D', 20)
+                    ws.set_column('E:E', 15)
+                
+                # Education Sheet (no URL)
+                if edu_data:
+                    df = pd.DataFrame(edu_data)
+                    df.to_excel(writer, sheet_name='Education', index=False)
+                    ws = writer.sheets['Education']
+                    for col_num, value in enumerate(df.columns.values):
+                        ws.write(0, col_num, value, header_format)
+                    ws.set_column('A:A', 20)
+                    ws.set_column('B:B', 40)
+                    ws.set_column('C:C', 40)
+                
+                # Projects Sheet (no URL)
+                if proj_data:
+                    df = pd.DataFrame(proj_data)
+                    df.to_excel(writer, sheet_name='Projects', index=False)
+                    ws = writer.sheets['Projects']
+                    for col_num, value in enumerate(df.columns.values):
+                        ws.write(0, col_num, value, header_format)
+                    ws.set_column('A:A', 20)
+                    ws.set_column('B:B', 30)
+                    ws.set_column('F:F', 50)
+                
+                # Certifications Sheet (no URL)
+                if cert_data:
+                    df = pd.DataFrame(cert_data)
+                    df.to_excel(writer, sheet_name='Certifications', index=False)
+                    ws = writer.sheets['Certifications']
+                    for col_num, value in enumerate(df.columns.values):
+                        ws.write(0, col_num, value, header_format)
+                    ws.set_column('A:A', 20)
+                    ws.set_column('B:B', 40)
+                    ws.set_column('C:C', 35)
+                
+                # Awards Sheet (no URL)
+                if awards_data:
+                    df = pd.DataFrame(awards_data)
+                    df.to_excel(writer, sheet_name='Awards', index=False)
+                    ws = writer.sheets['Awards']
+                    for col_num, value in enumerate(df.columns.values):
+                        ws.write(0, col_num, value, header_format)
+                    ws.set_column('A:A', 20)
+                    ws.set_column('B:B', 35)
+                
+                # Courses Sheet (no URL)
+                if courses_data:
+                    df = pd.DataFrame(courses_data)
+                    df.to_excel(writer, sheet_name='Courses', index=False)
+                    ws = writer.sheets['Courses']
+                    for col_num, value in enumerate(df.columns.values):
+                        ws.write(0, col_num, value, header_format)
+                    ws.set_column('A:A', 20)
+                    ws.set_column('B:B', 40)
+            
+            logger.info(f"✅ Exported {len(profiles)} profiles to {filepath}")
+            return filepath, None
+            
+        except Exception as e:
+            logger.error(f"Export error: {e}")
+            return None, str(e)
+    
+    def _export_flat_format(self, profiles):
+        """Export in flat format (single sheet)"""
+        try:
+            filename = f"linkedin_profiles_flat_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            filepath = os.path.join('exports', filename)
+            
+            flat_data = []
+            for profile in profiles:
+                first_exp = profile.get('experience', [{}])[0] if profile.get('experience') else {}
+                first_edu = profile.get('education', [{}])[0] if profile.get('education') else {}
+                
+                # Calculate total experience in months
+                total_months = 0
+                for exp in profile.get('experience', []):
+                    dates = self.extract_dates(exp.get('duration', ''))
+                    if dates['duration_months']:
+                        total_months += int(dates['duration_months'])
+                
+                flat_data.append({
+                    'Name': profile.get('name', ''),
+                    'URL': profile.get('url', ''),
+                    'Headline': profile.get('headline', ''),
+                    'About': profile.get('about', '')[:300] if profile.get('about') else '',
+                    'Current_Company': first_exp.get('company_name', ''),
+                    'Current_Position': first_exp.get('designation', ''),
+                    'Total_Experience_Months': total_months,
+                    'Education_College': first_edu.get('college', ''),
+                    'Education_Degree': first_edu.get('degree', ''),
+                    'Total_Projects': len(profile.get('projects', [])),
+                    'Total_Certifications': len(profile.get('licenses', [])),
+                    'Last_Updated': profile.get('last_updated', '')
+                })
+            
+            df = pd.DataFrame(flat_data)
+            df.to_excel(filepath, index=False, engine='openpyxl')
+            
+            return filepath, None
+            
+        except Exception as e:
+            return None, str(e)
+
+# Helper function for analytics
+def calculate_profile_completeness(profile):
+    """Calculate profile completeness percentage"""
+    score = 0
+    total_points = 10
+    
+    # Name (mandatory)
+    if profile.get('name') and profile.get('name') != 'N/A':
+        score += 1
+    
+    # Headline
+    if profile.get('headline') and profile.get('headline') != 'N/A':
+        score += 1
+    
+    # About section
+    if profile.get('about') and profile.get('about') != 'N/A' and len(profile.get('about', '')) > 50:
+        score += 1
+    
+    # Experience (at least one)
+    if profile.get('experience') and len(profile.get('experience', [])) > 0:
+        score += 2
+    
+    # Education (at least one)
+    if profile.get('education') and len(profile.get('education', [])) > 0:
+        score += 2
+    
+    # Projects
+    if profile.get('projects') and len(profile.get('projects', [])) > 0:
+        score += 1
+    
+    # Certifications
+    if profile.get('licenses') and len(profile.get('licenses', [])) > 0:
+        score += 1
+    
+    # Courses or Awards
+    if (profile.get('courses') and len(profile.get('courses', [])) > 0) or \
+       (profile.get('honors_awards') and len(profile.get('honors_awards', [])) > 0):
+        score += 1
+    
+    return round((score / total_points) * 100, 1)
+
+# Initialize managers
+profile_manager = ProfileManager(collection)
+export_manager = ExportManager(collection)
+
+# ==================== ROUTES ====================
+
+@app.route('/')
+def dashboard():
+    """Main dashboard"""
+    try:
+        stats = profile_manager.get_statistics()
+        recent_profiles = profile_manager.get_all_profiles(limit=5)
+        return render_template('dashboard.html', stats=stats, recent_profiles=recent_profiles)
+    except Exception as e:
+        logger.error(f"Dashboard error: {e}")
+        return render_template('dashboard.html', stats={'total_profiles': 0, 'today_profiles': 0, 'top_companies': [], 'top_schools': []}, recent_profiles=[])
+
+@app.route('/profiles')
+def profiles():
+    """Profiles listing page"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = 20
+        skip = (page - 1) * per_page
+        
+        search_query = request.args.get('search', '')
+        
+        if search_query:
+            profiles_list = profile_manager.search_profiles(search_query, limit=per_page)
+            total_profiles = len(profiles_list)
+        else:
+            profiles_list = profile_manager.get_all_profiles(limit=per_page, skip=skip)
+            total_profiles = collection.count_documents({}) if collection is not None else 0
+        
+        total_pages = (total_profiles + per_page - 1) // per_page
+        
+        return render_template('profiles.html', 
+                             profiles=profiles_list, 
+                             current_page=page, 
+                             total_pages=total_pages,
+                             search_query=search_query)
+    except Exception as e:
+        logger.error(f"Profiles page error: {e}")
+        return render_template('profiles.html', profiles=[], current_page=1, total_pages=1, search_query='')
+
+@app.route('/profile/<profile_id>')
+def profile_detail(profile_id):
+    """Profile detail page"""
+    try:
+        profile = profile_manager.get_profile_by_id(profile_id)
+        if not profile:
+            flash('Profile not found', 'error')
+            return redirect(url_for('profiles'))
+        
+        return render_template('profile_detail.html', profile=profile)
+    except Exception as e:
+        logger.error(f"Profile detail error: {e}")
+        flash('Error loading profile', 'error')
+        return redirect(url_for('profiles'))
+
+@app.route('/scraper')
+def scraper():
+    """Scraping interface page"""
+    return render_template('scraper.html')
+
+@app.route('/analytics')
+def analytics():
+    """Analytics dashboard"""
+    try:
+        stats = profile_manager.get_statistics()
+        
+        recent_activity = []
+        if collection is not None:
+            pipeline_recent = [
+                {'$match': {'last_updated': {'$gte': datetime.now() - timedelta(days=30)}}},
+                {'$group': {
+                    '_id': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$last_updated'}},
+                    'count': {'$sum': 1}
+                }},
+                {'$sort': {'_id': 1}}
+            ]
+            recent_activity = list(collection.aggregate(pipeline_recent))
+        
+        return render_template('analytics.html', stats=stats, recent_activity=recent_activity)
+    except Exception as e:
+        logger.error(f"Analytics error: {e}")
+        return render_template('analytics.html', stats={'total_profiles': 0, 'today_profiles': 0, 'top_companies': [], 'top_schools': []}, recent_activity=[])
+    
+
+# ==================== API ROUTES ====================
+
+@app.route('/api/scrape', methods=['POST'])
+def api_scrape():
+    """API endpoint to scrape a profile (creates new or updates existing)"""
+    try:
+        data = request.get_json()
+        url = data.get('url', '').strip()
+        
+        if not url:
+            return jsonify({'success': False, 'error': 'URL is required'}), 400
+        
+        if not ScrapingManager.validate_linkedin_url(url):
+            return jsonify({'success': False, 'error': 'Invalid LinkedIn profile URL'}), 400
+        
+        # Check if profile exists
+        is_update = False
+        profile_id = None
+        if collection is not None:
+            existing = collection.find_one({'url': url})
+            if existing:
+                is_update = True
+                profile_id = str(existing['_id'])
+        
+        # Run scraper (it will handle create or update)
+        success, message = ScrapingManager.run_scraper(url)
+        
+        if success:
+            if is_update:
+                return jsonify({
+                    'success': True, 
+                    'message': 'Profile updated successfully',
+                    'url': url,
+                    'action': 'updated',
+                    'profile_id': profile_id
+                })
+            else:
+                # Get the newly created profile ID
+                new_profile = collection.find_one({'url': url})
+                new_profile_id = str(new_profile['_id']) if new_profile else None
+                
+                return jsonify({
+                    'success': True, 
+                    'message': 'Profile scraped and saved successfully',
+                    'url': url,
+                    'action': 'created',
+                    'profile_id': new_profile_id
+                })
+        else:
+            return jsonify({
+                'success': False,
+                'error': message
+            }), 500
+        
+    except Exception as e:
+        logger.error(f"API scrape error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/profiles', methods=['GET'])
+def api_get_profiles():
+    """API endpoint to get profiles"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        limit = request.args.get('limit', 20, type=int)
+        search = request.args.get('search', '')
+        
+        skip = (page - 1) * limit
+        
+        if search:
+            profiles_list = profile_manager.search_profiles(search, limit=limit)
+        else:
+            profiles_list = profile_manager.get_all_profiles(limit=limit, skip=skip)
+        
+        return jsonify({
+            'success': True,
+            'profiles': profiles_list,
+            'page': page,
+            'limit': limit
+        })
+        
+    except Exception as e:
+        logger.error(f"API get profiles error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/export', methods=['POST'])
+def api_export():
+    """API endpoint to export profiles"""
+    try:
+        data = request.get_json() or {}
+        format_type = data.get('format', 'grouped')
+        filters = data.get('filters', {})
+        
+        filepath, error = export_manager.export_to_excel(format_type, filters)
+        
+        if error:
+            return jsonify({'success': False, 'error': error}), 500
+        
+        if filepath and os.path.exists(filepath):
+            return send_file(
+                filepath, 
+                as_attachment=True, 
+                download_name=os.path.basename(filepath),
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+        else:
+            return jsonify({'success': False, 'error': 'Export file not found'}), 500
+            
+    except Exception as e:
+        logger.error(f"API export error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    
+#----delete profile route
+@app.route('/api/delete-profile', methods=['POST'])
+def delete_profile():
+    try:
+        data = request.get_json()
+        profile_id = data.get("profile_id")
+
+        if not profile_id:
+            return jsonify({"success": False, "error": "Profile ID missing"}), 400
+
+        result = collection.delete_one({"_id": ObjectId(profile_id)})
+
+        if result.deleted_count == 1:
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "error": "Profile not found"}), 404
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/stats', methods=['GET'])
+def api_get_stats():
+    """API endpoint to get statistics"""
+    try:
+        stats = profile_manager.get_statistics()
+        return jsonify({'success': True, 'stats': stats})
+    except Exception as e:
+        logger.error(f"API get stats error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/bulk-scrape', methods=['POST'])
+def api_bulk_scrape():
+    """API endpoint for bulk scraping"""
+    try:
+        data = request.get_json()
+        urls = data.get('urls', [])
+        
+        if not urls:
+            return jsonify({'success': False, 'error': 'No URLs provided'}), 400
+        
+        valid_urls = []
+        invalid_urls = []
+        existing_urls = []
+        
+        for url in urls:
+            url = url.strip()
+            if ScrapingManager.validate_linkedin_url(url):
+                # Don't skip existing URLs anymore - they will be updated
+                valid_urls.append(url)
+                if collection is not None and collection.find_one({'url': url}):
+                    existing_urls.append(url)
+            else:
+                invalid_urls.append(url)
+        
+        if not valid_urls:
+            return jsonify({
+                'success': False, 
+                'error': 'No valid URLs to scrape',
+                'invalid_urls': invalid_urls
+            }), 400
+        
+        def bulk_scrape_background():
+            for url in valid_urls:
+                try:
+                    success, message = ScrapingManager.run_scraper(url)
+                    if success:
+                        logger.info(f"Bulk scraped: {url}")
+                    else:
+                        logger.error(f"Failed bulk scraping {url}: {message}")
+                except Exception as e:
+                    logger.error(f"Bulk scraping error for {url}: {e}")
+        
+        thread = threading.Thread(target=bulk_scrape_background)
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Bulk scraping started for {len(valid_urls)} profiles ({len(existing_urls)} will be updated)',
+            'valid_urls': valid_urls,
+            'existing_urls': existing_urls,
+            'invalid_urls': invalid_urls
+        })
+        
+    except Exception as e:
+        logger.error(f"API bulk scrape error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ==================== ANALYTICS API ROUTES ====================
+
+@app.route('/api/advanced-analytics', methods=['GET'])
+def api_advanced_analytics():
+    """API endpoint for advanced analytics data"""
+    try:
+        if collection is None:
+            return jsonify({'success': False, 'error': 'Database not connected'}), 500
+        
+        # Get all profiles for analysis
+        all_profiles = list(collection.find({}))
+        
+        # Calculate experience distribution (in months)
+        experience_distribution = []
+        exp_ranges = [
+            {'range': '0-12 months', 'min': 0, 'max': 12, 'count': 0},
+            {'range': '1-3 years', 'min': 13, 'max': 36, 'count': 0},
+            {'range': '3-5 years', 'min': 37, 'max': 60, 'count': 0},
+            {'range': '5-10 years', 'min': 61, 'max': 120, 'count': 0},
+            {'range': '10+ years', 'min': 121, 'max': 999999, 'count': 0}
+        ]
+        
+        for profile in all_profiles:
+            total_months = 0
+            for exp in profile.get('experience', []):
+                duration = exp.get('duration', '')
+                # Extract months from duration
+                years_match = re.search(r'(\d+)\s*yr', duration.lower())
+                months_match = re.search(r'(\d+)\s*mo', duration.lower())
+                
+                if years_match:
+                    total_months += int(years_match.group(1)) * 12
+                if months_match:
+                    total_months += int(months_match.group(1))
+            
+            # Categorize into ranges
+            for exp_range in exp_ranges:
+                if exp_range['min'] <= total_months <= exp_range['max']:
+                    exp_range['count'] += 1
+                    break
+        
+        experience_distribution = [{'range': r['range'], 'count': r['count']} for r in exp_ranges]
+        
+        # Top certifications
+        cert_counter = {}
+        for profile in all_profiles:
+            for cert in profile.get('licenses', []):
+                cert_name = cert.get('name', '')
+                if cert_name:
+                    cert_counter[cert_name] = cert_counter.get(cert_name, 0) + 1
+        
+        top_certifications = [
+            {'name': name, 'count': count} 
+            for name, count in sorted(cert_counter.items(), key=lambda x: x[1], reverse=True)[:10]
+        ]
+        
+        
+        # Top awards (Honors & Awards)
+        award_counter = {}
+        for profile in all_profiles:
+            for award in profile.get('honors_awards', []):
+                award_name = award.get('award_name', '')
+                if award_name:
+                    award_counter[award_name] = award_counter.get(award_name, 0) + 1
+
+        top_awards = [
+            {'name': name, 'count': count}
+            for name, count in sorted(award_counter.items(), key=lambda x: x[1], reverse=True)[:10]
+        ]
+
+
+
+        # Profiles with/without projects
+        profiles_with_projects = sum(1 for p in all_profiles if p.get('projects'))
+        
+
+        # Top awards (Honors & Awards)
+        award_counter = {}
+        for profile in all_profiles:
+            for award in profile.get('honors_awards', []):
+                award_name = award.get('award_name', '')
+                if award_name:
+                    award_counter[award_name] = award_counter.get(award_name, 0) + 1
+
+        top_awards = [
+            {'name': name, 'count': count}
+            for name, count in sorted(award_counter.items(), key=lambda x: x[1], reverse=True)[:10]
+        ]
+
+
+        # Top locations
+        location_counter = {}
+        for profile in all_profiles:
+            for exp in profile.get('experience', []):
+                location = exp.get('location', '')
+                if location:
+                    # Extract country or city
+                    parts = location.split(',')
+                    if parts:
+                        loc = parts[-1].strip() if len(parts) > 1 else parts[0].strip()
+                        location_counter[loc] = location_counter.get(loc, 0) + 1
+        
+        top_locations = [
+            {'location': loc, 'count': count}
+            for loc, count in sorted(location_counter.items(), key=lambda x: x[1], reverse=True)[:8]
+        ]
+        
+        # Hourly activity (when profiles were scraped)
+        # hourly_activity = [{'hour': i, 'count': 0} for i in range(24)]
+        # for profile in all_profiles:
+        #     scraped_at = profile.get('scraped_at') or profile.get('last_updated')
+        #     if scraped_at and isinstance(scraped_at, datetime):
+        #         hour = scraped_at.hour
+        #         hourly_activity[hour]['count'] += 1
+
+
+        # Daily activity (last 30 days)
+        daily_activity_map = {}
+        thirty_days_ago = datetime.now() - timedelta(days=30)
+
+        for profile in all_profiles:
+            scraped_at = profile.get('scraped_at') or profile.get('last_updated')
+            if scraped_at and isinstance(scraped_at, datetime) and scraped_at >= thirty_days_ago:
+                day = scraped_at.strftime('%Y-%m-%d')
+                if day not in daily_activity_map:
+                    daily_activity_map[day] = 0
+                daily_activity_map[day] += 1
+
+        daily_activity = [
+            {'date': d, 'count': daily_activity_map[d]}
+            for d in sorted(daily_activity_map.keys())
+        ]
+
+        
+        # Experience levels
+        experience_levels = []
+        total = len(all_profiles)
+        for exp_range in exp_ranges:
+            percentage = round((exp_range['count'] / total * 100), 1) if total > 0 else 0
+            experience_levels.append({
+                'level': exp_range['range'],
+                'count': exp_range['count'],
+                'percentage': percentage
+            })
+        
+        # Unique companies and schools
+        unique_companies = len(set(
+            exp.get('company_name', '') 
+            for p in all_profiles 
+            for exp in p.get('experience', [])
+            if exp.get('company_name')
+        ))
+        
+        unique_schools = len(set(
+            edu.get('college', '')
+            for p in all_profiles
+            for edu in p.get('education', [])
+            if edu.get('college')
+        ))
+        
+        analytics_data = {
+            'success': True,
+            'analytics': {
+                'total_profiles': len(all_profiles),
+                'experience_distribution': experience_distribution,
+                'top_certifications': top_certifications,
+                'top_awards': top_awards,
+                'profiles_with_projects': profiles_with_projects,
+                'top_locations': top_locations,
+                # 'hourly_activity': [h for h in hourly_activity if h['count'] > 0],
+                 'daily_activity': daily_activity,
+                'experience_levels': experience_levels,
+                'unique_companies': unique_companies,
+                'unique_schools': unique_schools
+            }
+        }
+        
+        return jsonify(analytics_data)
+        
+    except Exception as e:
+        logger.error(f"Advanced analytics error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/export-analytics', methods=['GET'])
+def api_export_analytics():
+    """Export analytics report as Excel"""
+    try:
+        if collection is None:
+            return jsonify({'success': False, 'error': 'Database not connected'}), 500
+        
+        filename = f"analytics_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filepath = os.path.join('exports', filename)
+        
+        # Get analytics data
+        stats = profile_manager.get_statistics()
+        all_profiles = list(collection.find({}))
+        
+        # Prepare data for export
+        summary_data = [{
+            'Metric': 'Total Profiles',
+            'Value': stats['total_profiles']
+        }, {
+            'Metric': 'Profiles Added Today',
+            'Value': stats['today_profiles']
+        }, {
+            'Metric': 'Unique Companies',
+            'Value': len(set(exp.get('company_name', '') for p in all_profiles for exp in p.get('experience', []) if exp.get('company_name')))
+        }, {
+            'Metric': 'Unique Educational Institutions',
+            'Value': len(set(edu.get('college', '') for p in all_profiles for edu in p.get('education', []) if edu.get('college')))
+        }, {
+            'Metric': 'Total Certifications',
+            'Value': sum(len(p.get('licenses', [])) for p in all_profiles)
+        }, {
+            'Metric': 'Total Projects',
+            'Value': sum(len(p.get('projects', [])) for p in all_profiles)
+        }]
+        
+        # Company data
+        company_data = [{
+            'Rank': idx + 1,
+            'Company Name': comp['_id'],
+            'Profile Count': comp['count'],
+            'Percentage': round(comp['count'] / stats['total_profiles'] * 100, 2) if stats['total_profiles'] > 0 else 0
+        } for idx, comp in enumerate(stats['top_companies'][:20])]
+        
+        # School data
+        school_data = [{
+            'Rank': idx + 1,
+            'Institution Name': school['_id'],
+            'Alumni Count': school['count'],
+            'Percentage': round(school['count'] / stats['total_profiles'] * 100, 2) if stats['total_profiles'] > 0 else 0
+        } for idx, school in enumerate(stats['top_schools'][:20])]
+        
+        # Experience distribution
+        exp_dist_data = []
+        exp_ranges = [
+            {'range': '0-12 months', 'min': 0, 'max': 12, 'count': 0},
+            {'range': '1-3 years', 'min': 13, 'max': 36, 'count': 0},
+            {'range': '3-5 years', 'min': 37, 'max': 60, 'count': 0},
+            {'range': '5-10 years', 'min': 61, 'max': 120, 'count': 0},
+            {'range': '10+ years', 'min': 121, 'max': 999999, 'count': 0}
+        ]
+        
+        for profile in all_profiles:
+            total_months = 0
+            for exp in profile.get('experience', []):
+                duration = exp.get('duration', '')
+                years_match = re.search(r'(\d+)\s*yr', duration.lower())
+                months_match = re.search(r'(\d+)\s*mo', duration.lower())
+                
+                if years_match:
+                    total_months += int(years_match.group(1)) * 12
+                if months_match:
+                    total_months += int(months_match.group(1))
+            
+            for exp_range in exp_ranges:
+                if exp_range['min'] <= total_months <= exp_range['max']:
+                    exp_range['count'] += 1
+                    break
+        
+        exp_dist_data = [{
+            'Experience Range': r['range'],
+            'Profile Count': r['count'],
+            'Percentage': round(r['count'] / len(all_profiles) * 100, 2) if all_profiles else 0
+        } for r in exp_ranges]
+        
+        # Write to Excel
+        with pd.ExcelWriter(filepath, engine='xlsxwriter') as writer:
+            workbook = writer.book
+            
+            # Formats
+            header_format = workbook.add_format({
+                'bold': True,
+                'bg_color': '#4472C4',
+                'font_color': 'white',
+                'border': 1
+            })
+            
+            title_format = workbook.add_format({
+                'bold': True,
+                'font_size': 14,
+                'bg_color': '#D9E1F2',
+                'border': 1
+            })
+            
+            # Summary Sheet
+            df_summary = pd.DataFrame(summary_data)
+            df_summary.to_excel(writer, sheet_name='Summary', index=False)
+            ws = writer.sheets['Summary']
+            for col_num, value in enumerate(df_summary.columns.values):
+                ws.write(0, col_num, value, header_format)
+            ws.set_column('A:A', 35)
+            ws.set_column('B:B', 20)
+            
+            # Top Companies Sheet
+            if company_data:
+                df_companies = pd.DataFrame(company_data)
+                df_companies.to_excel(writer, sheet_name='Top Companies', index=False)
+                ws = writer.sheets['Top Companies']
+                for col_num, value in enumerate(df_companies.columns.values):
+                    ws.write(0, col_num, value, header_format)
+                ws.set_column('B:B', 40)
+            
+            # Top Schools Sheet
+            if school_data:
+                df_schools = pd.DataFrame(school_data)
+                df_schools.to_excel(writer, sheet_name='Top Institutions', index=False)
+                ws = writer.sheets['Top Institutions']
+                for col_num, value in enumerate(df_schools.columns.values):
+                    ws.write(0, col_num, value, header_format)
+                ws.set_column('B:B', 50)
+            
+            # Experience Distribution Sheet
+            df_exp_dist = pd.DataFrame(exp_dist_data)
+            df_exp_dist.to_excel(writer, sheet_name='Experience Distribution', index=False)
+            ws = writer.sheets['Experience Distribution']
+            for col_num, value in enumerate(df_exp_dist.columns.values):
+                ws.write(0, col_num, value, header_format)
+            ws.set_column('A:A', 25)
+        
+        logger.info(f"✅ Analytics report exported to {filepath}")
+        
+        return send_file(
+            filepath,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        
+    except Exception as e:
+        logger.error(f"Export analytics error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/profile-insights/<profile_id>', methods=['GET'])
+def api_profile_insights(profile_id):
+    """Get detailed insights for a specific profile"""
+    try:
+        profile = profile_manager.get_profile_by_id(profile_id)
+        if not profile:
+            return jsonify({'success': False, 'error': 'Profile not found'}), 404
+        
+        # Calculate total experience in months
+        total_exp_months = 0
+        for exp in profile.get('experience', []):
+            duration = exp.get('duration', '')
+            years_match = re.search(r'(\d+)\s*yr', duration.lower())
+            months_match = re.search(r'(\d+)\s*mo', duration.lower())
+            
+            if years_match:
+                total_exp_months += int(years_match.group(1)) * 12
+            if months_match:
+                total_exp_months += int(months_match.group(1))
+        
+        insights = {
+            'success': True,
+            'profile_id': profile_id,
+            'name': profile.get('name'),
+            'insights': {
+                'total_experience_months': total_exp_months,
+                'total_experience_years': round(total_exp_months / 12, 1),
+                'total_companies': len(profile.get('experience', [])),
+                'total_educations': len(profile.get('education', [])),
+                'total_projects': len(profile.get('projects', [])),
+                'total_certifications': len(profile.get('licenses', [])),
+                'total_courses': len(profile.get('courses', [])),
+                'total_awards': len(profile.get('honors_awards', [])),
+                'has_about_section': bool(profile.get('about') and profile.get('about') != 'N/A'),
+                'profile_completeness': calculate_profile_completeness(profile)
+            }
+        }
+        
+        return jsonify(insights)
+        
+    except Exception as e:
+        logger.error(f"Profile insights error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/comparison', methods=['POST'])
+def api_comparison():
+    """Compare multiple profiles"""
+    try:
+        data = request.get_json()
+        profile_ids = data.get('profile_ids', [])
+        
+        if not profile_ids or len(profile_ids) < 2:
+            return jsonify({'success': False, 'error': 'At least 2 profile IDs required'}), 400
+        
+        comparison_data = []
+        for profile_id in profile_ids[:5]:  # Limit to 5 profiles
+            profile = profile_manager.get_profile_by_id(profile_id)
+            if profile:
+                # Calculate metrics
+                total_exp_months = 0
+                for exp in profile.get('experience', []):
+                    duration = exp.get('duration', '')
+                    years_match = re.search(r'(\d+)\s*yr', duration.lower())
+                    months_match = re.search(r'(\d+)\s*mo', duration.lower())
+                    
+                    if years_match:
+                        total_exp_months += int(years_match.group(1)) * 12
+                    if months_match:
+                        total_exp_months += int(months_match.group(1))
+                
+                comparison_data.append({
+                    'id': profile_id,
+                    'name': profile.get('name'),
+                    'headline': profile.get('headline'),
+                    'total_experience_years': round(total_exp_months / 12, 1),
+                    'companies_count': len(profile.get('experience', [])),
+                    'educations_count': len(profile.get('education', [])),
+                    'projects_count': len(profile.get('projects', [])),
+                    'certifications_count': len(profile.get('licenses', [])),
+                    'completeness': calculate_profile_completeness(profile)
+                })
+        
+        return jsonify({
+            'success': True,
+            'comparison': comparison_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Comparison error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ==================== TEMPLATE FILTERS ====================
+
+@app.template_filter('datetime_format')
+def datetime_format(value, format='%Y-%m-%d %H:%M'):
+    if isinstance(value, str):
+        try:
+            value = datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
+        except:
+            return value
+    return value.strftime(format) if value else ''
+
+@app.template_filter('truncate_text')
+def truncate_text(text, length=100):
+    if not text:
+        return ''
+    return text[:length] + '...' if len(text) > length else text
+
+@app.template_filter('format_number')
+def format_number(value):
+    try:
+        return f"{int(value):,}"
+    except:
+        return value
+
+# ==================== CONTEXT PROCESSORS ====================
+
+@app.context_processor
+def inject_stats():
+    try:
+        if collection is not None:
+            basic_stats = {
+                'total_profiles': collection.count_documents({}),
+                'today_profiles': collection.count_documents({
+                    'last_updated': {'$gte': datetime.now().replace(hour=0, minute=0, second=0)}
+                })
+            }
+        else:
+            basic_stats = {'total_profiles': 0, 'today_profiles': 0}
+        return dict(global_stats=basic_stats)
+    except:
+        return dict(global_stats={'total_profiles': 0, 'today_profiles': 0})
+
+# ==================== MAIN ====================
+
+if __name__ == '__main__':
+    # Create necessary directories
+    os.makedirs('uploads', exist_ok=True)
+    os.makedirs('exports', exist_ok=True)
+    os.makedirs('templates', exist_ok=True)
+    os.makedirs('static/css', exist_ok=True)
+    os.makedirs('static/js', exist_ok=True)
+    
+    # Run the application
+    app.run(debug=True, host='0.0.0.0', port=5000)
+
+
+*********************************************************************************************************************************************************
+
+#----------------------------- Scraper_runner.py
+# import os
+# import sys
+# from selenium import webdriver
+# from selenium.webdriver.common.by import By
+# from selenium.webdriver.chrome.options import Options
+# from time import sleep
+# from dotenv import load_dotenv
+# from pymongo import MongoClient
+# from datetime import datetime
+# import logging
+
+# load_dotenv()
+
+# logger = logging.getLogger(__name__)
+
+# def run_linkedin_scraper(profile_url):
+#     """
+#     This function will integrate with your Final_code.py scraping logic
+#     """
+#     try:
+#         # MongoDB connection
+#         client = MongoClient(os.getenv('MONGO_URI', 'mongodb://localhost:27017/'))
+#         db = client[os.getenv('DATABASE_NAME', 'Linkedin')]
+#         collection = db[os.getenv('COLLECTION_NAME', 'profile_data')]
+        
+#         # Check if profile already exists
+#         existing = collection.find_one({'url': profile_url})
+#         if existing:
+#             logger.info(f"Profile already exists: {profile_url}")
+#             return False, "Profile already exists"
+        
+#         # Setup Chrome options
+#         chrome_options = Options()
+#         chrome_options.add_argument("--headless")
+#         chrome_options.add_argument("--no-sandbox")
+#         chrome_options.add_argument("--disable-dev-shm-usage")
+        
+#         # Initialize driver
+#         driver = webdriver.Chrome(options=chrome_options)
+        
+#         try:
+#             # Login to LinkedIn
+#             driver.get('https://www.linkedin.com/login')
+#             sleep(2)
+            
+#             email_input = driver.find_element(By.ID, 'username')
+#             email_input.send_keys(os.getenv('Email'))
+            
+#             password_input = driver.find_element(By.ID, 'password')
+#             password_input.send_keys(os.getenv('Password'))
+#             password_input.submit()
+            
+#             sleep(3)
+            
+#             # Navigate to profile
+#             driver.get(profile_url)
+#             sleep(5)
+            
+#             # Basic profile data extraction (integrate your Final_code.py logic here)
+#             profile_data = {
+#                 'url': profile_url,
+#                 'scraped_at': datetime.now(),
+#                 'last_updated': datetime.now(),
+#                 'name': 'Extracted Name',  # Replace with actual extraction
+#                 'headline': 'Extracted Headline',  # Replace with actual extraction
+#                 'about': 'Extracted About',  # Replace with actual extraction
+#                 'experience': [],  # Add your experience extraction logic
+#                 'education': [],   # Add your education extraction logic
+#                 'projects': [],    # Add your projects extraction logic
+#                 'licenses': [],    # Add your licenses extraction logic
+#                 'honors_awards': [], # Add your awards extraction logic
+#                 'courses': []      # Add your courses extraction logic
+#             }
+            
+#             # Save to MongoDB
+#             collection.insert_one(profile_data)
+#             logger.info(f"Successfully scraped and saved: {profile_url}")
+            
+#             return True, "Profile scraped successfully"
+            
+#         finally:
+#             driver.quit()
+            
+#     except Exception as e:
+#         logger.error(f"Error scraping {profile_url}: {e}")
+#         return False, str(e)
+    
+#     finally:
+#         if 'client' in locals():
+#             client.close()
+
+#-------------- 2nd code  --------------
+
+# import os
+# import sys
+# from selenium import webdriver
+# from selenium.webdriver.common.by import By
+# from selenium.webdriver.chrome.options import Options
+# from selenium.webdriver.common.keys import Keys
+# from time import sleep
+# from dotenv import load_dotenv
+# from pymongo import MongoClient
+# from datetime import datetime
+# import logging
+
+# # Load environment variables
+# load_dotenv()
+
+# # Logger setup
+# logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# logger = logging.getLogger(__name__)
+
+# def run_linkedin_scraper(profile_url):
+#     """
+#     Scrapes LinkedIn profile details and stores them in MongoDB
+#     """
+
+#     try:
+#         # Connect to MongoDB
+#         client = MongoClient(os.getenv('MONGO_URI', 'mongodb://localhost:27017/'))
+#         db = client[os.getenv('DATABASE_NAME', 'Linkedin')]
+#         collection = db[os.getenv('COLLECTION_NAME', 'profile_data')]
+
+#         # Skip if profile already exists
+#         existing = collection.find_one({'url': profile_url})
+#         if existing:
+#             logger.info(f"Profile already exists: {profile_url}")
+#             return False, "Profile already exists"
+
+#         # Chrome options for headless scraping
+#         chrome_options = Options()
+#         chrome_options.add_argument("--headless")
+#         chrome_options.add_argument("--no-sandbox")
+#         chrome_options.add_argument("--disable-dev-shm-usage")
+#         chrome_options.add_argument("--window-size=1920,1080")
+#         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+
+#         driver = webdriver.Chrome(options=chrome_options)
+
+#         try:
+#             # --- LOGIN PHASE ---
+#             driver.get("https://www.linkedin.com/login")
+#             sleep(2)
+
+#             email = os.getenv("Email")
+#             password = os.getenv("Password")
+
+#             if not email or not password:
+#                 raise ValueError("LinkedIn Email or Password not set in .env file")
+
+#             driver.find_element(By.ID, "username").send_keys(email)
+#             driver.find_element(By.ID, "password").send_keys(password, Keys.RETURN)
+#             sleep(4)
+
+#             # --- PROFILE SCRAPING ---
+#             driver.get(profile_url)
+#             sleep(5)
+
+#             # Extract Name
+#             try:
+#                 name = driver.find_element(By.CSS_SELECTOR, "h1.text-heading-xlarge").text.strip()
+#             except:
+#                 name = "N/A"
+
+#             # Extract Headline
+#             try:
+#                 headline = driver.find_element(By.CSS_SELECTOR, "div.text-body-medium.break-words").text.strip()
+#             except:
+#                 headline = "N/A"
+
+#             # Extract About
+#             try:
+#                 about_button = driver.find_element(By.XPATH, "//button[contains(., 'About')]")
+#                 about_button.send_keys(Keys.RETURN)
+#                 sleep(2)
+#             except:
+#                 pass
+
+#             try:
+#                 about = driver.find_element(By.XPATH, "//section[contains(@class, 'summary')]//p").text.strip()
+#             except:
+#                 # Some layouts use different structure
+#                 try:
+#                     about = driver.find_element(By.XPATH, "//div[contains(@class,'display-flex ph5')]//span").text.strip()
+#                 except:
+#                     about = "N/A"
+
+#             # Extract Experience
+#             experience = []
+#             try:
+#                 exp_sections = driver.find_elements(By.XPATH, "//section[contains(@id,'experience')]//li")
+#                 for exp in exp_sections[:5]:
+#                     role = exp.find_element(By.TAG_NAME, "span").text.strip()
+#                     company = exp.find_element(By.XPATH, ".//span[contains(@class,'t-14 t-normal')]").text.strip()
+#                     experience.append({"role": role, "company": company})
+#             except:
+#                 experience = []
+
+#             # Extract Education
+#             education = []
+#             try:
+#                 edu_sections = driver.find_elements(By.XPATH, "//section[contains(@id,'education')]//li")
+#                 for edu in edu_sections[:3]:
+#                     school = edu.find_element(By.TAG_NAME, "span").text.strip()
+#                     degree = edu.find_element(By.XPATH, ".//span[contains(@class,'t-14 t-normal')]").text.strip()
+#                     education.append({"school": school, "degree": degree})
+#             except:
+#                 education = []
+
+#             # --- SAVE TO DATABASE ---
+#             profile_data = {
+#                 "url": profile_url,
+#                 "scraped_at": datetime.now(),
+#                 "last_updated": datetime.now(),
+#                 "name": name,
+#                 "headline": headline,
+#                 "about": about,
+#                 "experience": experience,
+#                 "education": education,
+#             }
+
+#             collection.insert_one(profile_data)
+#             logger.info(f"✅ Successfully scraped and saved: {profile_url}")
+
+#             return True, "Profile scraped successfully"
+
+#         finally:
+#             driver.quit()
+
+#     except Exception as e:
+#         logger.error(f"❌ Error scraping {profile_url}: {e}")
+#         return False, str(e)
+
+#     finally:
+#         if 'client' in locals():
+#             client.close()
+
+#---------------- 3rd code  ----------------
+
+# import os
+# from selenium import webdriver # type: ignore
+# from selenium.webdriver.common.by import By # type: ignore
+# from selenium.webdriver.chrome.options import Options # type: ignore
+# from selenium.webdriver.common.keys import Keys # type: ignore
+# from time import sleep
+# from dotenv import load_dotenv
+# from pymongo import MongoClient
+# from datetime import datetime
+# import logging
+
+# # Load environment variables
+# load_dotenv()
+
+# # Logger setup
+# logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+# logger = logging.getLogger(__name__)
+
+
+# def run_linkedin_scraper(profile_url):
+#     """
+#     Scrapes a LinkedIn profile and saves it in MongoDB.
+#     """
+
+#     try:
+#         # --- MONGODB CONNECTION ---
+#         client = MongoClient(os.getenv("MONGO_URI", "mongodb://localhost:27017/"))
+#         db = client[os.getenv("DATABASE_NAME", "Linkedin")]
+#         collection = db[os.getenv("COLLECTION_NAME", "profile_data")]
+
+#         # Check if the profile already exists
+#         if collection.find_one({"url": profile_url}):
+#             logger.info(f"⚠️ Profile already exists: {profile_url}")
+#             return False, "Profile already exists"
+
+#         # --- CHROME OPTIONS ---
+#         chrome_options = Options()
+#         chrome_options.add_argument("--headless=new")
+#         chrome_options.add_argument("--no-sandbox")
+#         chrome_options.add_argument("--disable-dev-shm-usage")
+#         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+#         chrome_options.add_argument("--window-size=1920,1080")
+
+#         # Initialize WebDriver
+#         driver = webdriver.Chrome(options=chrome_options)
+
+#         try:
+#             # --- LOGIN PHASE ---
+#             driver.get("https://www.linkedin.com/login")
+#             sleep(2)
+
+#             email = os.getenv("Email")
+#             password = os.getenv("Password")
+
+#             if not email or not password:
+#                 raise ValueError("LinkedIn Email or Password not found in .env file")
+
+#             driver.find_element(By.ID, "username").send_keys(email)
+#             driver.find_element(By.ID, "password").send_keys(password, Keys.RETURN)
+#             sleep(5)
+
+#             # --- SCRAPING PHASE ---
+#             driver.get(profile_url)
+#             sleep(5)
+
+#             # Scroll to load dynamic sections
+#             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+#             sleep(3)
+
+#             # Extract Name
+#             try:
+#                 name = driver.find_element(By.CSS_SELECTOR, "h1.text-heading-xlarge").text.strip()
+#             except:
+#                 name = "N/A"
+
+#             # Extract Headline
+#             try:
+#                 headline = driver.find_element(By.CSS_SELECTOR, "div.text-body-medium.break-words").text.strip()
+#             except:
+#                 headline = "N/A"
+
+#             # Extract About
+#             try:
+#                 about = driver.find_element(By.XPATH, "//section[contains(@class,'pv-about-section')]//p").text.strip()
+#             except:
+#                 try:
+#                     about = driver.find_element(
+#                         By.XPATH, "//div[contains(@class,'display-flex ph5')]//span"
+#                     ).text.strip()
+#                 except:
+#                     about = "N/A"
+
+#             # Extract Experience
+#             experience = []
+#             try:
+#                 exp_sections = driver.find_elements(
+#                     By.XPATH, "//section[contains(@id,'experience-section')]//li"
+#                 )
+#                 for exp in exp_sections[:5]:
+#                     try:
+#                         role = exp.find_element(By.TAG_NAME, "span").text.strip()
+#                         company = exp.find_element(
+#                             By.XPATH, ".//span[contains(@class,'t-14 t-normal')]"
+#                         ).text.strip()
+#                         experience.append({"role": role, "company": company})
+#                     except:
+#                         continue
+#             except:
+#                 experience = []
+
+#             # Extract Education
+#             education = []
+#             try:
+#                 edu_sections = driver.find_elements(
+#                     By.XPATH, "//section[contains(@id,'education-section')]//li"
+#                 )
+#                 for edu in edu_sections[:3]:
+#                     try:
+#                         school = edu.find_element(By.TAG_NAME, "span").text.strip()
+#                         degree = edu.find_element(
+#                             By.XPATH, ".//span[contains(@class,'t-14 t-normal')]"
+#                         ).text.strip()
+#                         education.append({"school": school, "degree": degree})
+#                     except:
+#                         continue
+#             except:
+#                 education = []
+
+#             # --- SAVE TO MONGODB ---
+#             profile_data = {
+#                 "url": profile_url,
+#                 "scraped_at": datetime.now(),
+#                 "last_updated": datetime.now(),
+#                 "name": name,
+#                 "headline": headline,
+#                 "about": about,
+#                 "experience": experience,
+#                 "education": education,
+#             }
+
+#             collection.insert_one(profile_data)
+#             logger.info(f"✅ Successfully scraped and saved: {profile_url}")
+
+#             return True, "Profile scraped successfully"
+
+#         finally:
+#             driver.quit()
+
+#     except Exception as e:
+#         logger.error(f"❌ Error scraping {profile_url}: {e}")
+#         return False, str(e)
+
+#     finally:
+#         if "client" in locals():
+#             client.close()
+
+#---------------- 4th Code  ----------------
+
+# import os
+# from selenium import webdriver
+# from selenium.webdriver.common.by import By
+# from selenium.webdriver.chrome.options import Options
+# from selenium.webdriver.common.keys import Keys
+# from selenium.webdriver.support.ui import WebDriverWait
+# from selenium.webdriver.support import expected_conditions as EC
+# from time import sleep
+# from dotenv import load_dotenv
+# from pymongo import MongoClient
+# from datetime import datetime
+# import logging
+
+# # Load environment variables
+# load_dotenv()
+
+# # Logger setup
+# logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+# logger = logging.getLogger(__name__)
+
+# def run_linkedin_scraper(profile_url):
+#     """
+#     Scrapes a LinkedIn profile and saves it in MongoDB.
+#     """
+#     try:
+#         # --- MONGODB CONNECTION ---
+#         client = MongoClient(os.getenv("MONGO_URI", "mongodb://localhost:27017/"))
+#         db = client[os.getenv("DATABASE_NAME", "Linkedin")]
+#         collection = db[os.getenv("COLLECTION_NAME", "profile_data")]
+
+#         # Check if the profile already exists
+#         if collection.find_one({"url": profile_url}):
+#             logger.info(f"⚠️ Profile already exists: {profile_url}")
+#             return False, "Profile already exists"
+
+#         # --- CHROME OPTIONS ---
+#         chrome_options = Options()
+#         chrome_options.add_argument("--headless=new")
+#         chrome_options.add_argument("--no-sandbox")
+#         chrome_options.add_argument("--disable-dev-shm-usage")
+#         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+#         chrome_options.add_argument("--window-size=1920,1080")
+
+#         # Initialize WebDriver
+#         driver = webdriver.Chrome(options=chrome_options)
+#         wait = WebDriverWait(driver, 10)
+
+#         try:
+#             # --- LOGIN PHASE ---
+#             driver.get("https://www.linkedin.com/login")
+#             sleep(2)
+
+#             email = os.getenv("Email")
+#             password = os.getenv("Password")
+
+#             if not email or not password:
+#                 raise ValueError("LinkedIn Email or Password not found in .env file")
+
+#             driver.find_element(By.ID, "username").send_keys(email)
+#             driver.find_element(By.ID, "password").send_keys(password, Keys.RETURN)
+#             sleep(5)
+
+#             # --- SCRAPING PHASE ---
+#             driver.get(profile_url)
+#             sleep(5)
+
+#             # Scroll to load dynamic sections
+#             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+#             sleep(3)
+
+#             # --- Extract Name ---
+#             try:
+#                 name_element = wait.until(
+#                     EC.presence_of_element_located((By.XPATH, "//h1[contains(@class,'text-heading') or contains(@class,'text-body-large')]"))
+#                 )
+#                 name = name_element.text.strip()
+#             except:
+#                 name = "N/A"
+
+#             # --- Extract Headline ---
+#             try:
+#                 headline_element = wait.until(
+#                     EC.presence_of_element_located((By.CSS_SELECTOR, "div.text-body-medium.break-words"))
+#                 )
+#                 headline = headline_element.text.strip()
+#             except:
+#                 headline = "N/A"
+
+#             # --- Extract About ---
+#             try:
+#                 about_element = driver.find_element(By.XPATH, "//section[contains(@class,'pv-about-section')]//p")
+#                 about = about_element.text.strip()
+#             except:
+#                 try:
+#                     about_element = driver.find_element(By.XPATH, "//div[contains(@class,'display-flex ph5')]//span")
+#                     about = about_element.text.strip()
+#                 except:
+#                     about = "N/A"
+
+#             # --- Extract Experience ---
+#             experience = []
+#             try:
+#                 exp_sections = driver.find_elements(By.XPATH, "//section[contains(@id,'experience-section')]//li")
+#                 for exp in exp_sections[:5]:
+#                     try:
+#                         role = exp.find_element(By.TAG_NAME, "span").text.strip()
+#                         company = exp.find_element(By.XPATH, ".//span[contains(@class,'t-14 t-normal')]").text.strip()
+#                         experience.append({"role": role, "company": company})
+#                     except:
+#                         continue
+#             except:
+#                 experience = []
+
+#             # --- Extract Education ---
+#             education = []
+#             try:
+#                 edu_sections = driver.find_elements(By.XPATH, "//section[contains(@id,'education-section')]//li")
+#                 for edu in edu_sections[:3]:
+#                     try:
+#                         school = edu.find_element(By.TAG_NAME, "span").text.strip()
+#                         degree = edu.find_element(By.XPATH, ".//span[contains(@class,'t-14 t-normal')]").text.strip()
+#                         education.append({"school": school, "degree": degree})
+#                     except:
+#                         continue
+#             except:
+#                 education = []
+
+#             # --- SAVE TO MONGODB ---
+#             profile_data = {
+#                 "url": profile_url,
+#                 "scraped_at": datetime.now(),
+#                 "last_updated": datetime.now(),
+#                 "name": name,
+#                 "headline": headline,
+#                 "about": about,
+#                 "experience": experience,
+#                 "education": education,
+#             }
+
+#             collection.insert_one(profile_data)
+#             logger.info(f"✅ Successfully scraped and saved: {profile_url}")
+
+#             return True, "Profile scraped successfully"
+
+#         finally:
+#             driver.quit()
+
+#     except Exception as e:
+#         logger.error(f"❌ Error scraping {profile_url}: {e}")
+#         return False, str(e)
+
+#     finally:
+#         if "client" in locals():
+#             client.close()
+
+
+# ----------------- 5th Code  ----------------
+# import os
+# from selenium import webdriver
+# from selenium.webdriver.common.by import By
+# from selenium.webdriver.chrome.options import Options
+# from selenium.webdriver.common.keys import Keys
+# from selenium.webdriver.support.ui import WebDriverWait
+# from selenium.webdriver.support import expected_conditions as EC
+# from time import sleep
+# from dotenv import load_dotenv
+# from pymongo import MongoClient
+# from datetime import datetime
+# from bs4 import BeautifulSoup
+# import logging
+
+# # ===============================
+# # Load environment variables
+# # ===============================
+# load_dotenv()
+
+# # ===============================
+# # Logger setup
+# # ===============================
+# logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+# logger = logging.getLogger(__name__)
+
+
+# def run_linkedin_scraper(profile_url):
+#     """
+#     Scrapes a LinkedIn profile and saves it in MongoDB.
+#     """
+#     try:
+#         # --- MONGODB CONNECTION ---
+#         client = MongoClient(os.getenv("MONGO_URI", "mongodb://localhost:27017/"))
+#         db = client[os.getenv("DATABASE_NAME", "Linkedin")]
+#         collection = db[os.getenv("COLLECTION_NAME", "profile_data")]
+
+#         # Check if the profile already exists
+#         if collection.find_one({"url": profile_url}):
+#             logger.info(f"⚠️ Profile already exists: {profile_url}")
+#             return False, "Profile already exists"
+
+#         # --- CHROME OPTIONS ---
+#         chrome_options = Options()
+#         chrome_options.add_argument("--headless=new")
+#         chrome_options.add_argument("--no-sandbox")
+#         chrome_options.add_argument("--disable-dev-shm-usage")
+#         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+#         chrome_options.add_argument("--window-size=1920,1080")
+
+#         # Initialize WebDriver
+#         driver = webdriver.Chrome(options=chrome_options)
+#         wait = WebDriverWait(driver, 15)
+
+#         try:
+#             # --- LOGIN PHASE ---
+#             driver.get("https://www.linkedin.com/login")
+#             sleep(2)
+
+#             email = os.getenv("Email")
+#             password = os.getenv("Password")
+
+#             if not email or not password:
+#                 raise ValueError("LinkedIn Email or Password not found in .env file")
+
+#             driver.find_element(By.ID, "username").send_keys(email)
+#             driver.find_element(By.ID, "password").send_keys(password, Keys.RETURN)
+#             sleep(5)
+
+#             # --- SCRAPING PHASE ---
+#             driver.get(profile_url)
+#             wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+#             sleep(3)
+
+#             # Scroll down to load profile data
+#             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+#             sleep(2)
+
+#             # --- Extract Name (Updated for 2025 LinkedIn UI) ---
+#             try:
+#                 name_element = wait.until(
+#                     EC.presence_of_element_located(
+#                         (By.CSS_SELECTOR, "h1.text-heading-xlarge, h1.inline.t-24.t-black.t-normal.break-words")
+#                     )
+#                 )
+#                 name = name_element.text.strip()
+#                 if not name:
+#                     sleep(3)
+#                     name_element = driver.find_element(By.TAG_NAME, "h1")
+#                     name = name_element.text.strip()
+#             except Exception as e:
+#                 logger.warning(f"⚠️ Could not extract name normally: {e}")
+#                 try:
+#                     soup = BeautifulSoup(driver.page_source, "html.parser")
+#                     name_tag = soup.find("h1")
+#                     name = name_tag.get_text(strip=True) if name_tag else "N/A"
+#                 except:
+#                     name = "N/A"
+
+#             # --- Extract Headline ---
+#             try:
+#                 headline_element = wait.until(
+#                     EC.presence_of_element_located((By.CSS_SELECTOR, "div.text-body-medium.break-words"))
+#                 )
+#                 headline = headline_element.text.strip()
+#             except:
+#                 headline = "N/A"
+
+#             # --- Extract About ---
+#             try:
+#                 about_element = driver.find_element(By.XPATH, "//section[contains(@class,'pv-about-section')]//p")
+#                 about = about_element.text.strip()
+#             except:
+#                 try:
+#                     about_element = driver.find_element(By.XPATH, "//div[contains(@class,'display-flex ph5')]//span")
+#                     about = about_element.text.strip()
+#                 except:
+#                     about = "N/A"
+
+#             # --- Extract Experience ---
+#             experience = []
+#             try:
+#                 exp_sections = driver.find_elements(By.XPATH, "//section[contains(@id,'experience-section')]//li")
+#                 for exp in exp_sections[:5]:
+#                     try:
+#                         role = exp.find_element(By.TAG_NAME, "span").text.strip()
+#                         company = exp.find_element(By.XPATH, ".//span[contains(@class,'t-14 t-normal')]").text.strip()
+#                         experience.append({"role": role, "company": company})
+#                     except:
+#                         continue
+#             except:
+#                 experience = []
+
+#             # --- Extract Education ---
+#             education = []
+#             try:
+#                 edu_sections = driver.find_elements(By.XPATH, "//section[contains(@id,'education-section')]//li")
+#                 for edu in edu_sections[:3]:
+#                     try:
+#                         school = edu.find_element(By.TAG_NAME, "span").text.strip()
+#                         degree = edu.find_element(By.XPATH, ".//span[contains(@class,'t-14 t-normal')]").text.strip()
+#                         education.append({"school": school, "degree": degree})
+#                     except:
+#                         continue
+#             except:
+#                 education = []
+
+#             # --- SAVE TO MONGODB ---
+#             profile_data = {
+#                 "name": name,
+#                 "url": profile_url,
+#                 "headline": headline,
+#                 "about": about,
+#                 "last_updated": datetime.now(),
+#                 "scraped_at": datetime.now(),
+#                 "experience": experience,
+#                 "education": education,
+#             }
+
+#             collection.insert_one(profile_data)
+#             logger.info(f"✅ Successfully scraped and saved: {profile_url}")
+
+#             return True, "Profile scraped successfully"
+
+#         finally:
+#             driver.quit()
+
+#     except Exception as e:
+#         logger.error(f"❌ Error scraping {profile_url}: {e}")
+#         return False, str(e)
+
+#     finally:
+#         if "client" in locals():
+#             client.close()
+
+#------------------------------ 6th code ------------------------------
+'''
+import os
+import pandas as pd
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from time import sleep
+from dotenv import load_dotenv
+from pymongo import MongoClient
+from datetime import datetime
+from bs4 import BeautifulSoup
+import logging
+
+# ===============================
+# Load environment variables
+# ===============================
+load_dotenv()
+
+# ===============================
+# Logging setup
+#=============================
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
+
+def run_linkedin_scraper(profile_url):
+    """
+    Scrapes a LinkedIn profile (Name, Headline, About, Experience, Education, Projects)
+    Saves to MongoDB and exports to Excel.
+    """
+    try:
+        # --- MongoDB Connection ---
+        client = MongoClient(os.getenv("MONGO_URI", "mongodb://localhost:27017/"))
+        db = client[os.getenv("DATABASE_NAME", "Linkedin")]
+        collection = db[os.getenv("COLLECTION_NAME", "profile_data")]
+
+        # --- Chrome Options ---
+        chrome_options = Options()
+        chrome_options.add_argument("--headless=new")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+        chrome_options.add_argument("--window-size=1920,1080")
+
+        driver = webdriver.Chrome(options=chrome_options)
+        wait = WebDriverWait(driver, 15)
+
+        try:
+            # --- Login Phase ---
+            driver.get("https://www.linkedin.com/login")
+            sleep(2)
+
+            email = os.getenv("Email")
+            password = os.getenv("Password")
+
+            if not email or not password:
+                raise ValueError("LinkedIn Email or Password not found in .env file")
+
+            driver.find_element(By.ID, "username").send_keys(email)
+            driver.find_element(By.ID, "password").send_keys(password, Keys.RETURN)
+            sleep(5)
+
+            # --- Scrape Target Profile ---
+            driver.get(profile_url)
+            wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+            sleep(3)
+
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            sleep(2)
+
+            # Parse HTML with BeautifulSoup for easier extraction
+            soup = BeautifulSoup(driver.page_source, "html.parser")
+
+            # --- Name ---
+            try:
+                name = soup.find("h1").get_text(strip=True)
+            except:
+                name = "N/A"
+
+            # --- Headline ---
+            try:
+                headline = soup.find("div", class_="text-body-medium").get_text(strip=True)
+            except:
+                headline = "N/A"
+
+            # --- About Section ---
+            try:
+                about_tag = soup.find("div", {"id": "about"}).find_next("span")
+                about = about_tag.get_text(strip=True)
+            except:
+                about = "N/A"
+
+            # --- Experience Section ---
+            experience = []
+            try:
+                exp_section = soup.find("section", {"id": "experience"})
+                if exp_section:
+                    exp_items = exp_section.find_all("li")
+                    for exp in exp_items[:5]:
+                        title = exp.find("span", {"class": "mr1 t-bold"}).get_text(strip=True) if exp.find("span", {"class": "mr1 t-bold"}) else ""
+                        company = exp.find("span", {"class": "t-14 t-normal"}).get_text(strip=True) if exp.find("span", {"class": "t-14 t-normal"}) else ""
+                        duration = exp.find("span", {"class": "t-14 t-normal t-black--light"}).get_text(strip=True) if exp.find("span", {"class": "t-14 t-normal t-black--light"}) else ""
+                        experience.append({
+                            "title": title,
+                            "company": company,
+                            "duration": duration
+                        })
+            except Exception as e:
+                logger.warning(f"⚠️ Experience not extracted: {e}")
+
+            # --- Education Section ---
+            education = []
+            try:
+                edu_section = soup.find("section", {"id": "education"})
+                if edu_section:
+                    edu_items = edu_section.find_all("li")
+                    for edu in edu_items[:3]:
+                        school = edu.find("span", {"class": "mr1 hoverable-link-text"}).get_text(strip=True) if edu.find("span", {"class": "mr1 hoverable-link-text"}) else ""
+                        degree = edu.find("span", {"class": "t-14 t-normal"}).get_text(strip=True) if edu.find("span", {"class": "t-14 t-normal"}) else ""
+                        education.append({
+                            "school": school,
+                            "degree": degree
+                        })
+            except Exception as e:
+                logger.warning(f"⚠️ Education not extracted: {e}")
+
+            # --- Projects Section ---
+            projects = []
+            try:
+                proj_section = soup.find("section", {"id": "projects"})
+                if proj_section:
+                    proj_items = proj_section.find_all("li")
+                    for proj in proj_items[:3]:
+                        project_title = proj.find("span", {"class": "mr1 t-bold"}).get_text(strip=True) if proj.find("span", {"class": "mr1 t-bold"}) else ""
+                        project_desc = proj.find("span", {"class": "t-14 t-normal"}).get_text(strip=True) if proj.find("span", {"class": "t-14 t-normal"}) else ""
+                        projects.append({
+                            "project_title": project_title,
+                            "project_desc": project_desc
+                        })
+            except Exception as e:
+                logger.warning(f"⚠️ Projects not extracted: {e}")
+
+            # --- Prepare and Save Data ---
+            profile_data = {
+                "name": name,
+                "url": profile_url,
+                "headline": headline,
+                "about": about,
+                "experience": experience,
+                "education": education,
+                "projects": projects,
+                "last_updated": datetime.now(),
+                "scraped_at": datetime.now()
+            }
+
+            # Save in MongoDB
+            collection.insert_one(profile_data)
+
+            # Save to Excel (append mode)
+            excel_file = "linkedin_profiles_data.xlsx"
+            df = pd.DataFrame([{
+                "Name": name,
+                "URL": profile_url,
+                "Headline": headline,
+                "About": about,
+                "Experience": str(experience),
+                "Education": str(education),
+                "Projects": str(projects),
+                "Last Updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }])
+
+            if not os.path.exists(excel_file):
+                df.to_excel(excel_file, index=False)
+            else:
+                existing_df = pd.read_excel(excel_file)
+                combined = pd.concat([existing_df, df], ignore_index=True)
+                combined.to_excel(excel_file, index=False)
+
+            logger.info(f"✅ Profile scraped and exported: {profile_url}")
+            return True, "Profile scraped successfully"
+
+        finally:
+            driver.quit()
+
+    except Exception as e:
+        logger.error(f"❌ Error scraping {profile_url}: {e}")
+        return False, str(e)
+
+    finally:
+        if "client" in locals():
+            client.close()
+            '''
+#-------  new code
+'''
+import os
+import re
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, ElementClickInterceptedException
+from time import sleep
+from dotenv import load_dotenv
+from pymongo import MongoClient
+from datetime import datetime
+from bs4 import BeautifulSoup
+import logging
+
+# Load environment variables
+load_dotenv()
+
+# Logger setup
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
+
+def get_experience_tokens(driver, timeout=15):
+    """Scroll and fetch all hidden text tokens from the Experience section."""
+    driver.execute_script("window.scrollTo(0, document.body.scrollHeight * 0.35);")
+    sleep(2)
+
+    try:
+        exp_section = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((By.XPATH, "//section[.//span[text()='Experience']]"))
+        )
+    except TimeoutException:
+        logger.info("ℹ️ No 'Experience' section found on this profile.")
+        return []
+
+    exp_html = exp_section.get_attribute("outerHTML")
+    exp_soup = BeautifulSoup(exp_html, "lxml")
+    tokens = [s.get_text(strip=True) for s in exp_soup.select("span.visually-hidden") if s.get_text(strip=True)]
+    return tokens
+
+
+def parse_experience_tokens(tokens):
+    """Parse tokens into clean company_name, designation, duration, location"""
+    if tokens and tokens[0].strip().lower() == "experience":
+        tokens = tokens[1:]
+
+    roles_set = {
+        "Full-time", "Part-time", "Internship", "Contract", "Self-employed",
+        "Freelance", "Apprenticeship", "Volunteer", "Temporary", "Seasonal"
+    }
+
+    def is_duration(s: str) -> bool:
+        s2 = s.lower()
+        return (" to " in s2 and ("present" in s2 or "mo" in s2 or "yr" in s2)) or (" yr" in s2) or (" mo" in s2)
+
+    def is_location(s: str) -> bool:
+        if is_duration(s): return False
+        if s in roles_set: return False
+        loc_keywords = ["india", "remote", "on-site", "hybrid", "onsite", "work from home"]
+        if any(k in s.lower() for k in loc_keywords): return True
+        return ("," in s and len(s.split()) >= 2)
+
+    def clean_company(s: str) -> str:
+        if not s: return ""
+        for r in roles_set:
+            s = s.replace("· " + r, "").replace(r, "")
+        return s.strip()
+
+    def looks_like_description(s: str, is_company=False) -> bool:
+        if is_company: return False
+        return (len(s.split()) > 15 or len(s) > 120 or s.lower().endswith((".png", ".jpg", ".jpeg")))
+
+    result = []
+    i, n = 0, len(tokens)
+
+    while i < n:
+        designation, company, dur, loc = "", "", "", ""
+
+        if i < n:
+            designation = tokens[i]; i += 1
+
+        if i < n:
+            if tokens[i] not in roles_set and not is_duration(tokens[i]) and not is_location(tokens[i]):
+                company = tokens[i]; i += 1
+
+        if i < n and is_duration(tokens[i]):
+            dur = tokens[i]; i += 1
+
+        if i < n and is_location(tokens[i]):
+            loc = tokens[i]; i += 1
+
+        # Fix: swap if designation looks like duration
+        if is_duration(designation):
+            dur, designation = designation, ""
+
+        if looks_like_description(designation):
+            designation = ""
+
+        if company and any(kw in company.lower() for kw in ["pvt", "inc", "solutions", "system", "hr", "ltd"]):
+            pass
+        elif looks_like_description(company, is_company=True):
+            company = ""
+
+        if not designation and not company:
+            continue
+
+        result.append({
+            "company_name": clean_company(company),
+            "designation": designation,
+            "duration": dur,
+            "location": loc
+        })
+
+    clean_result = [r for r in result if not looks_like_description(r["duration"])]
+    return clean_result
+
+
+def run_linkedin_scraper(profile_url):
+    """
+    Scrapes a LinkedIn profile and saves it in MongoDB.
+    """
+    try:
+        # MongoDB connection
+        client = MongoClient(os.getenv("MONGO_URI", "mongodb://localhost:27017/"))
+        db = client[os.getenv("DATABASE_NAME", "Linkedin")]
+        collection = db[os.getenv("COLLECTION_NAME", "profile_data")]
+
+        # Check if profile already exists
+        if collection.find_one({"url": profile_url}):
+            logger.info(f"⚠️ Profile already exists: {profile_url}")
+            return False, "Profile already exists"
+
+        # Chrome options
+        chrome_options = Options()
+        chrome_options.add_argument("--headless=new")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+        chrome_options.add_argument("--window-size=1920,1080")
+
+        driver = webdriver.Chrome(options=chrome_options)
+        wait = WebDriverWait(driver, 20)
+
+        try:
+            # --- LOGIN ---
+            driver.get("https://www.linkedin.com/login")
+            sleep(2)
+
+            email = os.getenv("Email")
+            password = os.getenv("Password")
+
+            if not email or not password:
+                raise ValueError("LinkedIn Email or Password not found in .env file")
+
+            driver.find_element(By.ID, "username").send_keys(email)
+            driver.find_element(By.ID, "password").send_keys(password, Keys.RETURN)
+            sleep(5)
+
+            # --- PROFILE LOAD ---
+            driver.get(profile_url)
+            wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+            sleep(3)
+
+            # Progressive scroll
+            for _ in range(5):
+                driver.execute_script("window.scrollBy(0, document.body.scrollHeight/5);")
+                sleep(1)
+
+            # Click "see more" buttons
+            for btn_text in ["see more", "See more", "Show all"]:
+                try:
+                    buttons = driver.find_elements(By.XPATH, f"//button[contains(., '{btn_text}')]")
+                    for btn in buttons[:3]:  # Limit to avoid infinite loops
+                        try:
+                            driver.execute_script("arguments[0].click();", btn)
+                            sleep(1)
+                        except:
+                            pass
+                except:
+                    continue
+
+            page_source = driver.page_source
+            soup = BeautifulSoup(page_source, "lxml")
+
+            # --- NAME ---
+            try:
+                name_elem = soup.find("h1", class_="text-heading-xlarge")
+                if not name_elem:
+                    name_elem = soup.find("h1")
+                name = name_elem.get_text(strip=True) if name_elem else "N/A"
+            except:
+                name = "N/A"
+
+            # --- HEADLINE ---
+            try:
+                headline = soup.find("div", class_="text-body-medium").get_text(strip=True)
+            except:
+                headline = "N/A"
+
+            # --- ABOUT ---
+            try:
+                # Try clicking show more for about
+                try:
+                    driver.find_element(By.CLASS_NAME, "inline-show-more-text__button").click()
+                    sleep(1)
+                    page_source = driver.page_source
+                    soup = BeautifulSoup(page_source, "lxml")
+                except:
+                    pass
+
+                about_div = soup.find('div', {'class': 'display-flex ph5 pv3'})
+                if not about_div:
+                    about_div = soup.find('section', {'id': 'about'})
+                about = about_div.get_text(strip=True) if about_div else "N/A"
+            except:
+                about = "N/A"
+
+            # --- EXPERIENCE ---
+            tokens = get_experience_tokens(driver)
+            experience = parse_experience_tokens(tokens) if tokens else []
+
+            # --- EDUCATION ---
+            try:
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight * 0.5);")
+                sleep(2)
+
+                edu_section = driver.find_elements(By.XPATH, "//section[.//span[text()='Education']]")
+                if edu_section:
+                    edu_html = edu_section[0].get_attribute("outerHTML")
+                    edu_soup = BeautifulSoup(edu_html, "lxml")
+                    edu_blocks = edu_soup.find_all("li", {"class": "artdeco-list__item"})
+                    if not edu_blocks:
+                        edu_blocks = edu_soup.find_all("li", {"class": "pvs-list__paged-list-item"})
+                else:
+                    edu_blocks = []
+
+                education = []
+                for block in edu_blocks:
+                    spans = block.find_all("span", {"class": "visually-hidden"})
+                    if not spans: continue
+
+                    edu_dict = {}
+                    if len(spans) >= 1:
+                        edu_dict["college"] = spans[0].get_text(strip=True)
+                    if len(spans) >= 2:
+                        edu_dict["degree"] = spans[1].get_text(strip=True)
+                    if len(spans) >= 3:
+                        edu_dict["duration"] = spans[2].get_text(strip=True)
+                    if len(spans) >= 4:
+                        edu_dict["grade"] = spans[3].get_text(strip=True)
+
+                    if edu_dict.get("college"):
+                        education.append(edu_dict)
+            except Exception as e:
+                logger.warning(f"⚠️ Education error: {e}")
+                education = []
+
+            # --- PROJECTS ---
+            try:
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight * 0.6);")
+                sleep(2)
+
+                proj_section = driver.find_elements(By.XPATH, "//section[.//span[text()='Projects']]")
+                if proj_section:
+                    proj_html = proj_section[0].get_attribute("outerHTML")
+                    proj_soup = BeautifulSoup(proj_html, "lxml")
+                    items = proj_soup.find_all("li", {"class": "artdeco-list__item"})
+                    if not items:
+                        items = proj_soup.find_all("li", {"class": "pvs-list__paged-list-item"})
+                else:
+                    items = []
+
+                projects = []
+                for item in items:
+                    spans = item.find_all('span', {'class': 'visually-hidden'})
+                    filtered_spans = [
+                        s.get_text(strip=True) for s in spans
+                        if not any(keyword in s.get_text(strip=True).lower() 
+                                 for keyword in ['connection', 'mutual', 'profile', 'view'])
+                    ]
+
+                    proj_dict = {}
+                    if len(filtered_spans) > 0:
+                        proj_dict['project_name'] = filtered_spans[0]
+                    if len(filtered_spans) > 1:
+                        proj_dict['duration'] = filtered_spans[1]
+                    if len(filtered_spans) > 2:
+                        proj_dict['description'] = filtered_spans[2]
+                    if len(filtered_spans) > 3:
+                        proj_dict['skills'] = filtered_spans[3]
+
+                    if proj_dict.get('project_name'):
+                        projects.append(proj_dict)
+            except Exception as e:
+                logger.warning(f"⚠️ Projects error: {e}")
+                projects = []
+
+            # --- LICENSES/CERTIFICATIONS ---
+            try:
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight * 0.7);")
+                sleep(2)
+
+                lic_section = driver.find_elements(By.XPATH, 
+                    "//section[.//span[contains(text(), 'Licenses') or contains(text(), 'Certifications')]]")
+                
+                if lic_section:
+                    lic_html = lic_section[0].get_attribute("outerHTML")
+                    lic_soup = BeautifulSoup(lic_html, "lxml")
+                    items = lic_soup.find_all("li", {"class": "artdeco-list__item"})
+                    if not items:
+                        items = lic_soup.find_all("li", {"class": "pvs-list__paged-list-item"})
+                else:
+                    items = []
+
+                licenses = []
+                for item in items:
+                    spans = item.find_all('span', {'class': 'visually-hidden'})
+                    filtered_spans = [
+                        s.get_text(strip=True) for s in spans
+                        if not any(keyword in s.get_text(strip=True).lower() 
+                                 for keyword in ['connection', 'mutual', 'profile', 'view'])
+                    ]
+
+                    lic_dict = {}
+                    if len(filtered_spans) > 0:
+                        lic_dict['name'] = filtered_spans[0]
+                    if len(filtered_spans) > 1:
+                        lic_dict['institute'] = filtered_spans[1]
+                    if len(filtered_spans) > 2:
+                        lic_dict['issued_date'] = filtered_spans[2]
+
+                    if lic_dict.get('name'):
+                        licenses.append(lic_dict)
+            except Exception as e:
+                logger.warning(f"⚠️ Licenses error: {e}")
+                licenses = []
+
+            # --- COURSES ---
+            try:
+                courses_section = driver.find_elements(By.XPATH, 
+                    "//section[.//span[contains(text(), 'Course')]]")
+                
+                courses = []
+                if courses_section:
+                    courses_html = courses_section[0].get_attribute("outerHTML")
+                    courses_soup = BeautifulSoup(courses_html, "lxml")
+                    items = courses_soup.find_all("li", {"class": "artdeco-list__item"})
+                    if not items:
+                        items = courses_soup.find_all("li", {"class": "pvs-list__paged-list-item"})
+
+                    for item in items:
+                        spans = item.find_all('span', {'class': 'visually-hidden'})
+                        filtered_spans = [
+                            s.get_text(strip=True) for s in spans
+                            if not any(keyword in s.get_text(strip=True).lower() 
+                                     for keyword in ['connection', 'mutual', 'profile'])
+                        ]
+
+                        if len(filtered_spans) >= 2:
+                            courses.append({
+                                'course_name': filtered_spans[0],
+                                'associated_with': filtered_spans[1]
+                            })
+            except Exception as e:
+                logger.warning(f"⚠️ Courses error: {e}")
+                courses = []
+
+            # --- HONORS & AWARDS ---
+            try:
+                awards_section = driver.find_elements(By.XPATH, 
+                    "//section[.//span[contains(text(), 'Honors') or contains(text(), 'awards')]]")
+                
+                honors_awards = []
+                if awards_section:
+                    awards_html = awards_section[0].get_attribute("outerHTML")
+                    awards_soup = BeautifulSoup(awards_html, "lxml")
+                    items = awards_soup.find_all("li", {"class": "artdeco-list__item"})
+                    if not items:
+                        items = awards_soup.find_all("li", {"class": "pvs-list__paged-list-item"})
+
+                    for item in items:
+                        spans = [s.get_text(strip=True) for s in item.find_all("span", {"class": "visually-hidden"})]
+                        filtered_spans = [
+                            span for span in spans
+                            if not any(x in span.lower() for x in ["connection", "studied at", "view profile"])
+                        ]
+
+                        if filtered_spans:
+                            award_dict = {}
+                            if len(filtered_spans) >= 1:
+                                award_dict['award_name'] = filtered_spans[0]
+                            if len(filtered_spans) >= 2:
+                                parts = filtered_spans[1].split('·')
+                                award_dict['issued_by'] = parts[0].replace('Issued by', '').strip()
+                                if len(parts) > 1:
+                                    award_dict['issued_date'] = parts[1].strip()
+                            if len(filtered_spans) >= 3:
+                                award_dict['associated_with'] = filtered_spans[2].replace('Associated with', '').strip()
+
+                            honors_awards.append(award_dict)
+            except Exception as e:
+                logger.warning(f"⚠️ Awards error: {e}")
+                honors_awards = []
+
+            # --- SAVE TO MONGODB ---
+            profile_data = {
+                "name": name,
+                "url": profile_url,
+                "headline": headline,
+                "about": about,
+                "experience": experience,
+                "education": education,
+                "projects": projects,
+                "licenses": licenses,
+                "courses": courses,
+                "honors_awards": honors_awards,
+                "scraped_at": datetime.now(),
+                "last_updated": datetime.now()
+            }
+
+            collection.insert_one(profile_data)
+            logger.info(f"✅ Profile saved: {name}")
+
+            return True, "Profile scraped successfully"
+
+        finally:
+            driver.quit()
+
+    except Exception as e:
+        logger.error(f"❌ Error scraping {profile_url}: {e}")
+        return False, str(e)
+
+    finally:
+        if "client" in locals():
+            client.close()
+            '''
+#-------  SUCCESS code
+'''
+import os
+import re
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, ElementClickInterceptedException
+from time import sleep
+from dotenv import load_dotenv
+from pymongo import MongoClient
+from datetime import datetime
+from bs4 import BeautifulSoup
+import logging
+
+# Load environment variables
+load_dotenv()
+
+# Logger setup
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
+
+def get_experience_tokens(driver, timeout=15):
+    """Scroll and fetch all hidden text tokens from the Experience section."""
+    driver.execute_script("window.scrollTo(0, document.body.scrollHeight * 0.35);")
+    sleep(2)
+
+    try:
+        exp_section = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((By.XPATH, "//section[.//span[text()='Experience']]"))
+        )
+    except TimeoutException:
+        logger.info("ℹ️ No 'Experience' section found on this profile.")
+        return []
+
+    exp_html = exp_section.get_attribute("outerHTML")
+    exp_soup = BeautifulSoup(exp_html, "lxml")
+    tokens = [s.get_text(strip=True) for s in exp_soup.select("span.visually-hidden") if s.get_text(strip=True)]
+    return tokens
+
+
+def parse_experience_tokens(tokens):
+    """Parse tokens into clean company_name, designation, duration, location"""
+    if tokens and tokens[0].strip().lower() == "experience":
+        tokens = tokens[1:]
+
+    roles_set = {
+        "Full-time", "Part-time", "Internship", "Contract", "Self-employed",
+        "Freelance", "Apprenticeship", "Volunteer", "Temporary", "Seasonal"
+    }
+
+    def is_duration(s: str) -> bool:
+        s2 = s.lower()
+        return (" to " in s2 and ("present" in s2 or "mo" in s2 or "yr" in s2)) or (" yr" in s2) or (" mo" in s2)
+
+    def is_location(s: str) -> bool:
+        if is_duration(s): return False
+        if s in roles_set: return False
+        loc_keywords = ["india", "remote", "on-site", "hybrid", "onsite", "work from home"]
+        if any(k in s.lower() for k in loc_keywords): return True
+        return ("," in s and len(s.split()) >= 2)
+
+    def clean_company(s: str) -> str:
+        if not s: return ""
+        for r in roles_set:
+            s = s.replace("· " + r, "").replace(r, "")
+        return s.strip()
+
+    def looks_like_description(s: str, is_company=False) -> bool:
+        if is_company: return False
+        return (len(s.split()) > 15 or len(s) > 120 or s.lower().endswith((".png", ".jpg", ".jpeg")))
+
+    result = []
+    i, n = 0, len(tokens)
+
+    while i < n:
+        designation, company, dur, loc = "", "", "", ""
+
+        if i < n:
+            designation = tokens[i]; i += 1
+
+        if i < n:
+            if tokens[i] not in roles_set and not is_duration(tokens[i]) and not is_location(tokens[i]):
+                company = tokens[i]; i += 1
+
+        if i < n and is_duration(tokens[i]):
+            dur = tokens[i]; i += 1
+
+        if i < n and is_location(tokens[i]):
+            loc = tokens[i]; i += 1
+
+        # Fix: swap if designation looks like duration
+        if is_duration(designation):
+            dur, designation = designation, ""
+
+        if looks_like_description(designation):
+            designation = ""
+
+        if company and any(kw in company.lower() for kw in ["pvt", "inc", "solutions", "system", "hr", "ltd"]):
+            pass
+        elif looks_like_description(company, is_company=True):
+            company = ""
+
+        if not designation and not company:
+            continue
+
+        result.append({
+            "company_name": clean_company(company),
+            "designation": designation,
+            "duration": dur,
+            "location": loc
+        })
+
+    clean_result = [r for r in result if not looks_like_description(r["duration"])]
+    return clean_result
+
+
+def run_linkedin_scraper(profile_url):
+    """
+    Scrapes a LinkedIn profile and saves it in MongoDB.
+    """
+    try:
+        # MongoDB connection
+        client = MongoClient(os.getenv("MONGO_URI", "mongodb://localhost:27017/"))
+        db = client[os.getenv("DATABASE_NAME", "Linkedin")]
+        collection = db[os.getenv("COLLECTION_NAME", "profile_data")]
+
+        # Check if profile already exists
+        if collection.find_one({"url": profile_url}):
+            logger.info(f"⚠️ Profile already exists: {profile_url}")
+            return False, "Profile already exists"
+
+        # Chrome options
+        chrome_options = Options()
+        chrome_options.add_argument("--headless=new")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+        chrome_options.add_argument("--window-size=1920,1080")
+
+        driver = webdriver.Chrome(options=chrome_options)
+        wait = WebDriverWait(driver, 20)
+
+        try:
+            # --- LOGIN ---
+            driver.get("https://www.linkedin.com/login")
+            sleep(2)
+
+            email = os.getenv("Email")
+            password = os.getenv("Password")
+
+            if not email or not password:
+                raise ValueError("LinkedIn Email or Password not found in .env file")
+
+            driver.find_element(By.ID, "username").send_keys(email)
+            driver.find_element(By.ID, "password").send_keys(password, Keys.RETURN)
+            sleep(5)
+
+            # --- PROFILE LOAD ---
+            driver.get(profile_url)
+            wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+            sleep(3)
+
+            # Progressive scroll
+            for _ in range(5):
+                driver.execute_script("window.scrollBy(0, document.body.scrollHeight/5);")
+                sleep(1)
+
+            # Click "see more" buttons
+            for btn_text in ["see more", "See more", "Show all"]:
+                try:
+                    buttons = driver.find_elements(By.XPATH, f"//button[contains(., '{btn_text}')]")
+                    for btn in buttons[:3]:  # Limit to avoid infinite loops
+                        try:
+                            driver.execute_script("arguments[0].click();", btn)
+                            sleep(1)
+                        except:
+                            pass
+                except:
+                    continue
+
+            page_source = driver.page_source
+            soup = BeautifulSoup(page_source, "lxml")
+
+            # --- NAME ---
+            try:
+                name_elem = soup.find("h1", class_="text-heading-xlarge")
+                if not name_elem:
+                    name_elem = soup.find("h1")
+                name = name_elem.get_text(strip=True) if name_elem else "N/A"
+            except:
+                name = "N/A"
+
+            # --- HEADLINE ---
+            try:
+                headline = soup.find("div", class_="text-body-medium").get_text(strip=True)
+            except:
+                headline = "N/A"
+
+            # --- ABOUT ---
+            
+            try:
+                # Try clicking show more for about
+                try:
+                    driver.find_element(By.CLASS_NAME, "inline-show-more-text__button").click()
+                    sleep(1)
+                    page_source = driver.page_source
+                    soup = BeautifulSoup(page_source, "lxml")
+                except:
+                    pass
+
+                about_div = soup.find('div', {'class': 'display-flex ph5 pv3'})
+                if not about_div:
+                    about_div = soup.find('section', {'id': 'about'})
+                about = about_div.get_text(strip=True) if about_div else "N/A"
+            except:
+                about = "N/A"
+
+            # --- EXPERIENCE ---
+            tokens = get_experience_tokens(driver)
+            experience = parse_experience_tokens(tokens) if tokens else []
+
+            # --- EDUCATION ---
+            try:
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight * 0.5);")
+                sleep(2)
+
+                edu_section = driver.find_elements(By.XPATH, "//section[.//span[text()='Education']]")
+                if edu_section:
+                    edu_html = edu_section[0].get_attribute("outerHTML")
+                    edu_soup = BeautifulSoup(edu_html, "lxml")
+                    edu_blocks = edu_soup.find_all("li", {"class": "artdeco-list__item"})
+                    if not edu_blocks:
+                        edu_blocks = edu_soup.find_all("li", {"class": "pvs-list__paged-list-item"})
+                else:
+                    edu_blocks = []
+
+                education = []
+                for block in edu_blocks:
+                    spans = block.find_all("span", {"class": "visually-hidden"})
+                    if not spans: continue
+
+                    edu_dict = {}
+                    if len(spans) >= 1:
+                        edu_dict["college"] = spans[0].get_text(strip=True)
+                    if len(spans) >= 2:
+                        edu_dict["degree"] = spans[1].get_text(strip=True)
+                    if len(spans) >= 3:
+                        edu_dict["duration"] = spans[2].get_text(strip=True)
+                    if len(spans) >= 4:
+                        edu_dict["grade"] = spans[3].get_text(strip=True)
+
+                    if edu_dict.get("college"):
+                        education.append(edu_dict)
+            except Exception as e:
+                logger.warning(f"⚠️ Education error: {e}")
+                education = []
+
+            # --- PROJECTS ---
+            try:
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight * 0.6);")
+                sleep(2)
+
+                proj_section = driver.find_elements(By.XPATH, "//section[.//span[text()='Projects']]")
+                if proj_section:
+                    proj_html = proj_section[0].get_attribute("outerHTML")
+                    proj_soup = BeautifulSoup(proj_html, "lxml")
+                    items = proj_soup.find_all("li", {"class": "artdeco-list__item"})
+                    if not items:
+                        items = proj_soup.find_all("li", {"class": "pvs-list__paged-list-item"})
+                else:
+                    items = []
+
+                projects = []
+                for item in items:
+                    spans = item.find_all('span', {'class': 'visually-hidden'})
+                    filtered_spans = [
+                        s.get_text(strip=True) for s in spans
+                        if not any(keyword in s.get_text(strip=True).lower() 
+                                 for keyword in ['connection', 'mutual', 'profile', 'view'])
+                    ]
+
+                    proj_dict = {}
+                    if len(filtered_spans) > 0:
+                        proj_dict['project_name'] = filtered_spans[0]
+                    if len(filtered_spans) > 1:
+                        proj_dict['duration'] = filtered_spans[1]
+                    if len(filtered_spans) > 2:
+                        proj_dict['description'] = filtered_spans[2]
+                    if len(filtered_spans) > 3:
+                        proj_dict['skills'] = filtered_spans[3]
+
+                    if proj_dict.get('project_name'):
+                        projects.append(proj_dict)
+            except Exception as e:
+                logger.warning(f"⚠️ Projects error: {e}")
+                projects = []
+
+            # --- LICENSES/CERTIFICATIONS ---
+            try:
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight * 0.7);")
+                sleep(2)
+
+                lic_section = driver.find_elements(By.XPATH, 
+                    "//section[.//span[contains(text(), 'Licenses') or contains(text(), 'Certifications')]]")
+                
+                if lic_section:
+                    lic_html = lic_section[0].get_attribute("outerHTML")
+                    lic_soup = BeautifulSoup(lic_html, "lxml")
+                    items = lic_soup.find_all("li", {"class": "artdeco-list__item"})
+                    if not items:
+                        items = lic_soup.find_all("li", {"class": "pvs-list__paged-list-item"})
+                else:
+                    items = []
+
+                licenses = []
+                for item in items:
+                    spans = item.find_all('span', {'class': 'visually-hidden'})
+                    filtered_spans = [
+                        s.get_text(strip=True) for s in spans
+                        if not any(keyword in s.get_text(strip=True).lower() 
+                                 for keyword in ['connection', 'mutual', 'profile', 'view'])
+                    ]
+
+                    lic_dict = {}
+                    if len(filtered_spans) > 0:
+                        lic_dict['name'] = filtered_spans[0]
+                    if len(filtered_spans) > 1:
+                        lic_dict['institute'] = filtered_spans[1]
+                    if len(filtered_spans) > 2:
+                        lic_dict['issued_date'] = filtered_spans[2]
+
+                    if lic_dict.get('name'):
+                        licenses.append(lic_dict)
+            except Exception as e:
+                logger.warning(f"⚠️ Licenses error: {e}")
+                licenses = []
+
+            # --- COURSES ---
+            try:
+                courses_section = driver.find_elements(By.XPATH, 
+                    "//section[.//span[contains(text(), 'Course')]]")
+                
+                courses = []
+                if courses_section:
+                    courses_html = courses_section[0].get_attribute("outerHTML")
+                    courses_soup = BeautifulSoup(courses_html, "lxml")
+                    items = courses_soup.find_all("li", {"class": "artdeco-list__item"})
+                    if not items:
+                        items = courses_soup.find_all("li", {"class": "pvs-list__paged-list-item"})
+
+                    for item in items:
+                        spans = item.find_all('span', {'class': 'visually-hidden'})
+                        filtered_spans = [
+                            s.get_text(strip=True) for s in spans
+                            if not any(keyword in s.get_text(strip=True).lower() 
+                                     for keyword in ['connection', 'mutual', 'profile'])
+                        ]
+
+                        if len(filtered_spans) >= 2:
+                            courses.append({
+                                'course_name': filtered_spans[0],
+                                'associated_with': filtered_spans[1]
+                            })
+            except Exception as e:
+                logger.warning(f"⚠️ Courses error: {e}")
+                courses = []
+
+            # --- HONORS & AWARDS ---
+            try:
+                awards_section = driver.find_elements(By.XPATH, 
+                    "//section[.//span[contains(text(), 'Honors') or contains(text(), 'awards')]]")
+                
+                honors_awards = []
+                if awards_section:
+                    awards_html = awards_section[0].get_attribute("outerHTML")
+                    awards_soup = BeautifulSoup(awards_html, "lxml")
+                    items = awards_soup.find_all("li", {"class": "artdeco-list__item"})
+                    if not items:
+                        items = awards_soup.find_all("li", {"class": "pvs-list__paged-list-item"})
+
+                    for item in items:
+                        spans = [s.get_text(strip=True) for s in item.find_all("span", {"class": "visually-hidden"})]
+                        filtered_spans = [
+                            span for span in spans
+                            if not any(x in span.lower() for x in ["connection", "studied at", "view profile"])
+                        ]
+
+                        if filtered_spans:
+                            award_dict = {}
+                            if len(filtered_spans) >= 1:
+                                award_dict['award_name'] = filtered_spans[0]
+                            if len(filtered_spans) >= 2:
+                                parts = filtered_spans[1].split('·')
+                                award_dict['issued_by'] = parts[0].replace('Issued by', '').strip()
+                                if len(parts) > 1:
+                                    award_dict['issued_date'] = parts[1].strip()
+                            if len(filtered_spans) >= 3:
+                                award_dict['associated_with'] = filtered_spans[2].replace('Associated with', '').strip()
+
+                            honors_awards.append(award_dict)
+            except Exception as e:
+                logger.warning(f"⚠️ Awards error: {e}")
+                honors_awards = []
+
+            # --- SAVE TO MONGODB ---
+            profile_data = {
+                "name": name,
+                "url": profile_url,
+                "headline": headline,
+                "about": about,
+                "experience": experience,
+                "education": education,
+                "projects": projects,
+                "licenses": licenses,
+                "courses": courses,
+                "honors_awards": honors_awards,
+                "scraped_at": datetime.now(),
+                "last_updated": datetime.now()
+            }
+
+            collection.insert_one(profile_data)
+            logger.info(f"✅ Profile saved: {name}")
+
+            return True, "Profile scraped successfully"
+
+        finally:
+            driver.quit()
+
+    except Exception as e:
+        logger.error(f"❌ Error scraping {profile_url}: {e}")
+        return False, str(e)
+
+    finally:
+        if "client" in locals():
+            client.close()
+            '''
+
+#-------  Trail code
+
+import os
+import re
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, ElementClickInterceptedException
+from time import sleep
+from dotenv import load_dotenv
+from pymongo import MongoClient
+from datetime import datetime
+from bs4 import BeautifulSoup
+import logging
+
+# Load environment variables
+load_dotenv()
+
+# Logger setup
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
+#----- Expand function 
+def expand_all_sections(driver):
+    """Click all expandable See All / Show More buttons on LinkedIn."""
+    button_texts = [
+        "See all", "see all",
+        "Show all", "show all",
+        "See more", "see more",
+        "Show more", "show more",
+        "Expand", "expand"
+    ]
+
+    for text in button_texts:
+        try:
+            buttons = driver.find_elements(By.XPATH, f"//button[contains(., '{text}')]")
+            for btn in buttons:
+                try:
+                    driver.execute_script("arguments[0].click();", btn)
+                    sleep(1)
+                except:
+                    pass
+        except:
+            pass
+
+
+
+def get_experience_tokens(driver, timeout=15):
+    """Scroll and fetch all hidden text tokens from the Experience section."""
+    driver.execute_script("window.scrollTo(0, document.body.scrollHeight * 0.35);")
+    sleep(2)
+
+    try:
+        exp_section = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((By.XPATH, "//section[.//span[text()='Experience']]"))
+        )
+    except TimeoutException:
+        logger.info("ℹ️ No 'Experience' section found on this profile.")
+        return []
+
+    exp_html = exp_section.get_attribute("outerHTML")
+    exp_soup = BeautifulSoup(exp_html, "lxml")
+    tokens = [s.get_text(strip=True) for s in exp_soup.select("span.visually-hidden") if s.get_text(strip=True)]
+    return tokens
+
+
+def parse_experience_tokens(tokens):
+    """Parse tokens into clean company_name, designation, duration, location"""
+    if tokens and tokens[0].strip().lower() == "experience":
+        tokens = tokens[1:]
+
+    roles_set = {
+        "Full-time", "Part-time", "Internship", "Contract", "Self-employed",
+        "Freelance", "Apprenticeship", "Volunteer", "Temporary", "Seasonal"
+    }
+
+    def is_duration(s: str) -> bool:
+        s2 = s.lower()
+        return (" to " in s2 and ("present" in s2 or "mo" in s2 or "yr" in s2)) or (" yr" in s2) or (" mo" in s2)
+
+    def is_location(s: str) -> bool:
+        if is_duration(s): return False
+        if s in roles_set: return False
+        loc_keywords = ["india", "remote", "on-site", "hybrid", "onsite", "work from home"]
+        if any(k in s.lower() for k in loc_keywords): return True
+        return ("," in s and len(s.split()) >= 2)
+
+    def clean_company(s: str) -> str:
+        if not s: return ""
+        for r in roles_set:
+            s = s.replace("· " + r, "").replace(r, "")
+        return s.strip()
+
+    def looks_like_description(s: str, is_company=False) -> bool:
+        if is_company: return False
+        return (len(s.split()) > 15 or len(s) > 120 or s.lower().endswith((".png", ".jpg", ".jpeg")))
+
+    result = []
+    i, n = 0, len(tokens)
+
+    while i < n:
+        designation, company, dur, loc = "", "", "", ""
+
+        if i < n:
+            designation = tokens[i]; i += 1
+
+        if i < n:
+            if tokens[i] not in roles_set and not is_duration(tokens[i]) and not is_location(tokens[i]):
+                company = tokens[i]; i += 1
+
+        if i < n and is_duration(tokens[i]):
+            dur = tokens[i]; i += 1
+
+        if i < n and is_location(tokens[i]):
+            loc = tokens[i]; i += 1
+
+        # Fix: swap if designation looks like duration
+        if is_duration(designation):
+            dur, designation = designation, ""
+
+        if looks_like_description(designation):
+            designation = ""
+
+        if company and any(kw in company.lower() for kw in ["pvt", "inc", "solutions", "system", "hr", "ltd"]):
+            pass
+        elif looks_like_description(company, is_company=True):
+            company = ""
+
+        if not designation and not company:
+            continue
+
+        result.append({
+            "company_name": clean_company(company),
+            "designation": designation,
+            "duration": dur,
+            "location": loc
+        })
+
+    clean_result = [r for r in result if not looks_like_description(r["duration"])]
+    return clean_result
+
+
+def run_linkedin_scraper(profile_url):
+    """
+    Scrapes a LinkedIn profile and saves/updates it in MongoDB.
+    If profile exists, it will be updated with new data.
+    """
+    try:
+        # MongoDB connection
+        client = MongoClient(os.getenv("MONGO_URI", "mongodb://localhost:27017/"))
+        db = client[os.getenv("DATABASE_NAME", "Linkedin")]
+        collection = db[os.getenv("COLLECTION_NAME", "profile_data")]
+
+        # Check if profile already exists
+        existing_profile = collection.find_one({"url": profile_url})
+        is_update = existing_profile is not None
+        
+        if is_update:
+            logger.info(f"🔄 Profile exists, will update: {profile_url}")
+        else:
+            logger.info(f"🆕 New profile, will create: {profile_url}")
+
+        # Chrome options
+        chrome_options = Options()
+        chrome_options.add_argument("--headless=new")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+        chrome_options.add_argument("--window-size=1920,1080")
+
+        driver = webdriver.Chrome(options=chrome_options)
+        wait = WebDriverWait(driver, 20)
+
+        try:
+            # --- LOGIN ---
+            driver.get("https://www.linkedin.com/login")
+            sleep(2)
+
+            email = os.getenv("Email")
+            password = os.getenv("Password")
+
+            if not email or not password:
+                raise ValueError("LinkedIn Email or Password not found in .env file")
+
+            driver.find_element(By.ID, "username").send_keys(email)
+            driver.find_element(By.ID, "password").send_keys(password, Keys.RETURN)
+            sleep(5)
+
+            # --- PROFILE LOAD ---
+            driver.get(profile_url)
+            wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+            sleep(3)
+            
+            # Expand all hidden sections before scraping
+            expand_all_sections(driver)
+
+            # Scroll fully to load dynamic blocks
+            for _ in range(8):
+                driver.execute_script("window.scrollBy(0, 800);")
+                sleep(1)
+
+            # Expand again after scroll
+            expand_all_sections(driver)
+
+
+            # Progressive scroll
+            for _ in range(5):
+                driver.execute_script("window.scrollBy(0, document.body.scrollHeight/5);")
+                sleep(1)
+
+            # Click "see more" buttons
+            for btn_text in ["see more", "See more", "Show all"]:
+                try:
+                    buttons = driver.find_elements(By.XPATH, f"//button[contains(., '{btn_text}')]")
+                    for btn in buttons[:3]:  # Limit to avoid infinite loops
+                        try:
+                            driver.execute_script("arguments[0].click();", btn)
+                            sleep(1)
+                        except:
+                            pass
+                except:
+                    continue
+
+            page_source = driver.page_source
+            soup = BeautifulSoup(page_source, "lxml")
+
+            # --- NAME ---
+            try:
+                name_elem = soup.find("h1", class_="text-heading-xlarge")
+                if not name_elem:
+                    name_elem = soup.find("h1")
+                name = name_elem.get_text(strip=True) if name_elem else "N/A"
+            except:
+                name = "N/A"
+
+            # --- HEADLINE ---
+            try:
+                headline = soup.find("div", class_="text-body-medium").get_text(strip=True)
+            except:
+                headline = "N/A"
+
+            # --- ABOUT ---
+            try:
+                # Try clicking show more for about
+                try:
+                    driver.find_element(By.CLASS_NAME, "inline-show-more-text__button").click()
+                    sleep(1)
+                    page_source = driver.page_source
+                    soup = BeautifulSoup(page_source, "lxml")
+                except:
+                    pass
+
+                about_div = soup.find('div', {'class': 'display-flex ph5 pv3'})
+                if not about_div:
+                    about_div = soup.find('section', {'id': 'about'})
+                about = about_div.get_text(strip=True) if about_div else "N/A"
+            except:
+                about = "N/A"
+
+            # --- EXPERIENCE ---
+            tokens = get_experience_tokens(driver)
+            experience = parse_experience_tokens(tokens) if tokens else []
+
+            # --- EDUCATION ---
+            try:
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight * 0.5);")
+                sleep(2)
+
+                edu_section = driver.find_elements(By.XPATH, "//section[.//span[text()='Education']]")
+                if edu_section:
+                    edu_html = edu_section[0].get_attribute("outerHTML")
+                    edu_soup = BeautifulSoup(edu_html, "lxml")
+                    edu_blocks = edu_soup.find_all("li", {"class": "artdeco-list__item"})
+                    if not edu_blocks:
+                        edu_blocks = edu_soup.find_all("li", {"class": "pvs-list__paged-list-item"})
+                else:
+                    edu_blocks = []
+
+                education = []
+                for block in edu_blocks:
+                    spans = block.find_all("span", {"class": "visually-hidden"})
+                    if not spans: continue
+
+                    edu_dict = {}
+                    if len(spans) >= 1:
+                        edu_dict["college"] = spans[0].get_text(strip=True)
+                    if len(spans) >= 2:
+                        edu_dict["degree"] = spans[1].get_text(strip=True)
+                    if len(spans) >= 3:
+                        edu_dict["duration"] = spans[2].get_text(strip=True)
+                    if len(spans) >= 4:
+                        edu_dict["grade"] = spans[3].get_text(strip=True)
+
+                    if edu_dict.get("college"):
+                        education.append(edu_dict)
+            except Exception as e:
+                logger.warning(f"⚠️ Education error: {e}")
+                education = []
+
+            # --- PROJECTS ---
+            try:
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight * 0.6);")
+                sleep(2)
+
+                proj_section = driver.find_elements(By.XPATH, "//section[.//span[text()='Projects']]")
+                if proj_section:
+                    proj_html = proj_section[0].get_attribute("outerHTML")
+                    proj_soup = BeautifulSoup(proj_html, "lxml")
+                    items = proj_soup.find_all("li", {"class": "artdeco-list__item"})
+                    if not items:
+                        items = proj_soup.find_all("li", {"class": "pvs-list__paged-list-item"})
+                else:
+                    items = []
+
+                projects = []
+                for item in items:
+                    spans = item.find_all('span', {'class': 'visually-hidden'})
+                    filtered_spans = [
+                        s.get_text(strip=True) for s in spans
+                        if not any(keyword in s.get_text(strip=True).lower() 
+                                 for keyword in ['connection', 'mutual', 'profile', 'view'])
+                    ]
+
+                    proj_dict = {}
+                    if len(filtered_spans) > 0:
+                        proj_dict['project_name'] = filtered_spans[0]
+                    if len(filtered_spans) > 1:
+                        proj_dict['duration'] = filtered_spans[1]
+                    if len(filtered_spans) > 2:
+                        proj_dict['description'] = filtered_spans[2]
+                    if len(filtered_spans) > 3:
+                        proj_dict['skills'] = filtered_spans[3]
+
+                    if proj_dict.get('project_name'):
+                        projects.append(proj_dict)
+            except Exception as e:
+                logger.warning(f"⚠️ Projects error: {e}")
+                projects = []
+
+            # --- LICENSES/CERTIFICATIONS ---
+            try:
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight * 0.7);")
+                sleep(2)
+
+                lic_section = driver.find_elements(By.XPATH, 
+                    "//section[.//span[contains(text(), 'Licenses') or contains(text(), 'Certifications')]]")
+                
+                if lic_section:
+                    lic_html = lic_section[0].get_attribute("outerHTML")
+                    lic_soup = BeautifulSoup(lic_html, "lxml")
+                    items = lic_soup.find_all("li", {"class": "artdeco-list__item"})
+                    if not items:
+                        items = lic_soup.find_all("li", {"class": "pvs-list__paged-list-item"})
+                else:
+                    items = []
+
+                licenses = []
+                for item in items:
+                    spans = item.find_all('span', {'class': 'visually-hidden'})
+                    filtered_spans = [
+                        s.get_text(strip=True) for s in spans
+                        if not any(keyword in s.get_text(strip=True).lower() 
+                                 for keyword in ['connection', 'mutual', 'profile', 'view'])
+                    ]
+
+                    lic_dict = {}
+                    if len(filtered_spans) > 0:
+                        lic_dict['name'] = filtered_spans[0]
+                    if len(filtered_spans) > 1:
+                        lic_dict['institute'] = filtered_spans[1]
+                    if len(filtered_spans) > 2:
+                        lic_dict['issued_date'] = filtered_spans[2]
+
+                    if lic_dict.get('name'):
+                        licenses.append(lic_dict)
+            except Exception as e:
+                logger.warning(f"⚠️ Licenses error: {e}")
+                licenses = []
+
+            # --- COURSES ---
+            try:
+                courses_section = driver.find_elements(By.XPATH, 
+                    "//section[.//span[contains(text(), 'Course')]]")
+                
+                courses = []
+                if courses_section:
+                    courses_html = courses_section[0].get_attribute("outerHTML")
+                    courses_soup = BeautifulSoup(courses_html, "lxml")
+                    items = courses_soup.find_all("li", {"class": "artdeco-list__item"})
+                    if not items:
+                        items = courses_soup.find_all("li", {"class": "pvs-list__paged-list-item"})
+
+                    for item in items:
+                        spans = item.find_all('span', {'class': 'visually-hidden'})
+                        filtered_spans = [
+                            s.get_text(strip=True) for s in spans
+                            if not any(keyword in s.get_text(strip=True).lower() 
+                                     for keyword in ['connection', 'mutual', 'profile'])
+                        ]
+
+                        if len(filtered_spans) >= 2:
+                            courses.append({
+                                'course_name': filtered_spans[0],
+                                'associated_with': filtered_spans[1]
+                            })
+            except Exception as e:
+                logger.warning(f"⚠️ Courses error: {e}")
+                courses = []
+
+            # --- HONORS & AWARDS ---
+            try:
+                awards_section = driver.find_elements(By.XPATH, 
+                    "//section[.//span[contains(text(), 'Honors') or contains(text(), 'awards')]]")
+                
+                honors_awards = []
+                if awards_section:
+                    awards_html = awards_section[0].get_attribute("outerHTML")
+                    awards_soup = BeautifulSoup(awards_html, "lxml")
+                    items = awards_soup.find_all("li", {"class": "artdeco-list__item"})
+                    if not items:
+                        items = awards_soup.find_all("li", {"class": "pvs-list__paged-list-item"})
+
+                    for item in items:
+                        spans = [s.get_text(strip=True) for s in item.find_all("span", {"class": "visually-hidden"})]
+                        filtered_spans = [
+                            span for span in spans
+                            if not any(x in span.lower() for x in ["connection", "studied at", "view profile"])
+                        ]
+
+                        if filtered_spans:
+                            award_dict = {}
+                            if len(filtered_spans) >= 1:
+                                award_dict['award_name'] = filtered_spans[0]
+                            if len(filtered_spans) >= 2:
+                                parts = filtered_spans[1].split('·')
+                                award_dict['issued_by'] = parts[0].replace('Issued by', '').strip()
+                                if len(parts) > 1:
+                                    award_dict['issued_date'] = parts[1].strip()
+                            if len(filtered_spans) >= 3:
+                                award_dict['associated_with'] = filtered_spans[2].replace('Associated with', '').strip()
+
+                            honors_awards.append(award_dict)
+            except Exception as e:
+                logger.warning(f"⚠️ Awards error: {e}")
+                honors_awards = []
+
+            # --- PREPARE PROFILE DATA ---
+            profile_data = {
+                "name": name,
+                "url": profile_url,
+                "headline": headline,
+                "about": about,
+                "experience": experience,
+                "education": education,
+                "projects": projects,
+                "licenses": licenses,
+                "courses": courses,
+                "honors_awards": honors_awards,
+                "last_updated": datetime.now()
+            }
+            
+            # Add scraped_at only for new profiles
+            if not is_update:
+                profile_data["scraped_at"] = datetime.now()
+
+            # --- SAVE OR UPDATE TO MONGODB ---
+            if is_update:
+                # Update existing profile
+                collection.update_one(
+                    {"url": profile_url},
+                    {"$set": profile_data}
+                )
+                logger.info(f"🔄 Profile updated: {name}")
+                return True, "Profile updated successfully"
+            else:
+                # Insert new profile
+                collection.insert_one(profile_data)
+                logger.info(f"✅ Profile saved: {name}")
+                return True, "Profile scraped successfully"
+
+        finally:
+            driver.quit()
+
+    except Exception as e:
+        logger.error(f"❌ Error scraping {profile_url}: {e}")
+        return False, str(e)
+
+    finally:
+        if "client" in locals():
+            client.close()
+        
+
+    

@@ -1,0 +1,74 @@
+{
+    "name": "Daksha Thakkar",
+    "url": "https://www.linkedin.com/in/daksha-thakkar-79a98577/",
+    "headline": "HR Manager at Zealous System (Great place to work Certified)",
+    "about": "As an Engineer by qualification and an enthusiastic HR person having 8 years of rich experience. I enjoy interacting with people which helps me in thriving an awesome culture and employee experience which leads to an environment that is result driven where employee success, achievements, participations are highly valued. \"Writing blogs, creating fashion content, travelling, books and having intellectual discussions is what keeps me engaged.\" I'm driven by  being passionate what I do and aims to add value to the Zealous team while continue to learn and grow as an Individual.As an Engineer by qualification and an enthusiastic HR person having 8 years of rich experience. \nI enjoy interacting with people which helps me in thriving an awesome culture and employee experience which leads to an environment that is result driven where employee success, achievements, participations are highly valued. \n\n\"Writing blogs, creating fashion content, travelling, books and having intellectual discussions is what keeps me engaged.\" I'm driven by  being passionate what I do and aims to add value to the Zealous team while continue to learn and grow as an Individual.",
+    "experience": [
+        {
+            "company_name": "Zealous System",
+            "designation": "HR Manager",
+            "duration": "Jul 2021 to Present \u00b7 4 yrs 3 mos",
+            "location": "Ahmedabad, Gujarat, India"
+        },
+        {
+            "company_name": "Credencys Solutions Inc",
+            "designation": "Human Resource",
+            "duration": "Jun 2019 to Jun 2020 \u00b7 1 yr 1 mo",
+            "location": "Ahmedabad Area, India"
+        },
+        {
+            "company_name": "Codal Inc.",
+            "designation": "HR Executive",
+            "duration": "Aug 2017 to Jan 2018 \u00b7 6 mos",
+            "location": "Ahmedabad Area, India"
+        },
+        {
+            "company_name": "Ethos HR",
+            "designation": "Sr. Recruiter",
+            "duration": "Apr 2016 to Aug 2017 \u00b7 1 yr 5 mos",
+            "location": "Ahmedabad Area, India"
+        }
+    ],
+    "education": [
+        {
+            "college": "Geetanjali institute of technical studies",
+            "degree": "Master\u2019s Degree, Computers",
+            "duration": "2009 - 2012",
+            "grade": "Grade: Honours"
+        },
+        {
+            "college": "International college for girls, Jaipur",
+            "degree": "Bachelor\u2019s Degree, Computers",
+            "duration": "2006 - 2009"
+        },
+        {
+            "college": "Central Academy,Chittorgarh",
+            "degree": "High School",
+            "duration": "2005 - 2006"
+        }
+    ],
+    "licenses": [
+        {
+            "name": "Diploma in software testing",
+            "institute": "Issued Apr 2015",
+            "issued_date": null
+        },
+        {
+            "name": "Rational Application Development",
+            "institute": "Issued Apr 2011",
+            "issued_date": null
+        }
+    ],
+    "projects": [],
+    "courses": [
+        {
+            "course_name": "RAD",
+            "associated_with": "Associated with Geetanjali institute of technical studies"
+        },
+        {
+            "course_name": "RFT",
+            "associated_with": "Associated with Geetanjali institute of technical studies"
+        }
+    ],
+    "honors_awards": []
+}

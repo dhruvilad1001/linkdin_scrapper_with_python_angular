@@ -1,0 +1,76 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Environment variables
+.env
+.env.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+backend.log
+frontend.log
+
+# Process IDs
+*.pid
+.backend.pid
+.frontend.pid
+
+# Exports
+exports/
+*.xlsx
+*.xls
+
+# Profile data
+profile_pictures/
+*.json
+!package.json
+!package-lock.json
+!tsconfig*.json
+!angular.json
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Angular
+/frontend/dist/
+/frontend/.angular/
+/frontend/out-tsc/
+
+# Testing
+coverage/
+.nyc_output/
+*.coverage
+htmlcov/
+
+# Database
+*.db
+*.sqlite
+
+# Temporary files
+tmp/
+temp/
+*.tmp

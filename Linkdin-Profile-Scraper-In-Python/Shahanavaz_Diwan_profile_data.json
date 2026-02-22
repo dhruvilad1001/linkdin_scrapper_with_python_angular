@@ -1,0 +1,97 @@
+{
+    "name": "Shahanavaz Diwan",
+    "url": "https://www.linkedin.com/in/shahanavaz-diwan/",
+    "headline": "\ud83c\udf93 M.Tech Cyber Security Student @ NFSU | Aspiring Cybersecurity Analyst | SIEM | VAPT | Cloud Security | Digital Forensics",
+    "about": "Aspiring cybersecurity professional with a solid foundation in information security principles. Currently pursuing a master's degree in Cybersecurity, I am dedicated to protecting digital assets and ensuring system integrity.Aspiring cybersecurity professional with a solid foundation in information security principles. Currently pursuing a master's degree in Cybersecurity, I am dedicated to protecting digital assets and ensuring system integrity.",
+    "experience": [
+        {
+            "company_name": "Sadbhavna Trust - STB",
+            "designation": "Web Developer",
+            "duration": "Feb 2024 to May 2024 \u00b7 4 mos",
+            "location": "Anand, Gujarat, India"
+        }
+    ],
+    "education": [
+        {
+            "college": "National Forensic Sciences University (NFSU)",
+            "degree": "Master's of technology , Cyber Security",
+            "duration": "Jul 2024 - Jul 2026"
+        },
+        {
+            "college": "Anand Agricultural University, Anand",
+            "degree": "Bachelor of Technology - B.Tech, Information Technology",
+            "duration": "2020 - 2024"
+        },
+        {
+            "college": "College of Agricultural Information Technology , Anand",
+            "degree": "Bachelor's degree, Information Technology",
+            "duration": "Nov 2020 - Jun 2024",
+            "grade": "Grade: 7.79"
+        },
+        {
+            "college": "VP & RPTP Science College, Vallabh Vidyanagar",
+            "degree": "12th, Science",
+            "duration": "Jun 2019 - Mar 2020"
+        }
+    ],
+    "licenses": [
+        {
+            "name": "Deloitte Australia - Cyber Job Simulation",
+            "institute": "Forage",
+            "issued_date": "Issued Jul 2025"
+        },
+        {
+            "name": "AWS Academy Graduate - AWS Academy Cloud Foundations",
+            "institute": "Amazon Web Services (AWS)",
+            "issued_date": "Issued Feb 2025"
+        },
+        {
+            "name": "MongoDB Node.js Developer Path",
+            "institute": "MongoDB",
+            "issued_date": "Issued Aug 2023"
+        },
+        {
+            "name": "React Basics",
+            "institute": "Coursera",
+            "issued_date": "Issued Aug 2023"
+        },
+        {
+            "name": "Geoprocessing using Python (WgCAPD)",
+            "institute": "Indian Institute of Remote Sensing (IIRS), Indian Space Research Organization (ISRO)",
+            "issued_date": "Issued Jul 2023"
+        },
+        {
+            "name": "Introduction to Web Development with HTML, CSS, JavaScript",
+            "institute": "Coursera",
+            "issued_date": "Issued Jul 2023"
+        },
+        {
+            "name": "Python (Basic)",
+            "institute": "HackerRank",
+            "issued_date": "Issued Jul 2023"
+        },
+        {
+            "name": "Problem Solving (Basic) Certificate",
+            "institute": "HackerRank",
+            "issued_date": "Issued Apr 2023"
+        },
+        {
+            "name": "Geodata Processing using Python",
+            "institute": "Indian Institute of Remote Sensing (IIRS), Indian Space Research Organization (ISRO)",
+            "issued_date": "Issued Feb 2023"
+        },
+        {
+            "name": "Fundamentals of Remote Sensing & GIS Technology",
+            "institute": "Indian Institute of Remote Sensing (IIRS), Indian Space Research Organization (ISRO)",
+            "issued_date": "Issued Sep 2022"
+        },
+        {
+            "name": "Introduction to CIP",
+            "institute": "OPSWAT Academy",
+            "issued_date": "Issued Sep 2025 \u00b7 Expired Sep 2025"
+        }
+    ],
+    "projects": [],
+    "courses": [],
+    "honors_awards": []
+}

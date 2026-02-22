@@ -1,0 +1,33 @@
+{
+    "name": "Parth Parmar",
+    "url": "https://www.linkedin.com/in/parth-parmar-73839b309/",
+    "headline": "MERN Stack Developer | REST API | DSA C++ | SQL |  President College of AIT (AIASA)",
+    "about": "Hi there, I'm Parth Parmar, a Full-stack MERN developer and programmer passionate about crafting dynamic web applications. With expertise in the MERN stack, I thrive on creating seamless user experiences and scalable solutions.Hi there, I'm Parth Parmar, a Full-stack MERN developer and programmer passionate about crafting dynamic web applications. With expertise in the MERN stack, I thrive on creating seamless user experiences and scalable solutions.",
+    "education": [
+        {
+            "college": "College of Agricultural Information Technology , Anand",
+            "degree": "B.TECH(AIT)",
+            "duration": "Oct 2022 - Jun 2026"
+        }
+    ],
+    "licenses": [
+        {
+            "name": "Full Stack Web Development",
+            "institute": "Apna College",
+            "issued_date": "Issued Jun 2025"
+        },
+        {
+            "name": "Application of AI/ML Model for Specific Crop Acreage Mapping",
+            "institute": "Indian Institute of Remote Sensing (IIRS), Indian Space Research Organization (ISRO)",
+            "issued_date": "Issued Apr 2025"
+        },
+        {
+            "name": "\u201cGeodata Processing using Python and Machine Learning\u201d",
+            "institute": "Indian Institute of Remote Sensing (IIRS), Indian Space Research Organization (ISRO)",
+            "issued_date": "Issued Apr 2025"
+        }
+    ],
+    "projects": [],
+    "courses": [],
+    "honors_awards": []
+}

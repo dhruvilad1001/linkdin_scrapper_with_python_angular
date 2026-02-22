@@ -1,0 +1,11 @@
+# Use official nginx image as base
+FROM nginx:stable-alpine
+
+# Remove default nginx content and copy our site
+RUN rm -rf /usr/share/nginx/html/*
+COPY index.html /usr/share/nginx/html/index.html
+
+# Expose port 80 (container)
+EXPOSE 80
+
+# Default command is included in nginx image; no CMD needed

@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkedIn Profile Scraper - Scraper</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand {
+            font-weight: bold;
+            color: #0077b5 !important;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .btn-linkedin {
+            background-color: #0077b5;
+            border-color: #0077b5;
+            color: white;
+        }
+        .btn-linkedin:hover {
+            background-color: #005885;
+            border-color: #005885;
+            color: white;
+        }
+        .scraping-progress {
+            display: none;
+        }
+        .url-input {
+            border-radius: 10px;
+            border: 2px solid #e9ecef;
+            transition: border-color 0.3s;
+        }
+        .url-input:focus {
+            border-color: #0077b5;
+            box-shadow: 0 0 0 0.2rem rgba(0, 119, 181, 0.25);
+        }
+        .feature-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+            font-size: 24px;
+            color: white;
+        }
+        .feature-1 { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .feature-2 { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .feature-3 { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .bulk-upload-area {
+            border: 2px dashed #0077b5;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        .bulk-upload-area:hover {
+            background-color: #f8f9fa;
+            border-color: #005885;
+        }
+        .bulk-upload-area.dragover {
+            background-color: #e3f2fd;
+            border-color: #0077b5;
+        }
+        .progress-container {
+            display: none;
+            margin-top: 20px;
+        }
+        .url-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-white shadow-sm">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+                <i class="fab fa-linkedin me-2"></i>LinkedIn Scraper Pro
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" href="{{ url_for('dashboard') }}">
+                            <i class="fas fa-tachometer-alt me-1"></i>Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" href="{{ url_for('profiles') }}">
+                            <i class="fas fa-users me-1"></i>Profiles
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active text-dark" href="{{ url_for('scraper') }}">
+                            <i class="fas fa-search me-1"></i>Scraper
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" href="{{ url_for('analytics') }}">
+                            <i class="fas fa-chart-bar me-1"></i>Analytics
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="row mb-4">
+                    <div class="col-12">
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+        {% endwith %}
+
+      <!-- Page Header - UPDATED VERSION -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <div class="card-body text-center py-5">
+                <h1 class="display-5 fw-bold mb-3 text-white">
+                    <i class="fas fa-search me-3"></i>LinkedIn Profile Scraper
+                </h1>
+                <p class="lead text-white">Extract comprehensive profile data from LinkedIn profiles</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+        <!-- Features -->
+        <div class="row mb-5">
+            <div class="col-md-4">
+                <div class="text-center">
+                    <div class="feature-icon feature-1">
+                        <i class="fas fa-user-plus"></i>
+                    </div>
+                    <h5>Single Profile</h5>
+                    <p class="text-muted">Scrape individual LinkedIn profiles with detailed information</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center">
+                    <div class="feature-icon feature-2">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <h5>Bulk Scraping</h5>
+                    <p class="text-muted">Upload multiple URLs and scrape profiles in batch</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center">
+                    <div class="feature-icon feature-3">
+                        <i class="fas fa-download"></i>
+                    </div>
+                    <h5>Export Data</h5>
+                    <p class="text-muted">Download scraped data in organized Excel format</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Single Profile Scraper -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-user-plus me-2"></i>Single Profile Scraper
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="singleProfileForm">
+                            <div class="mb-3">
+                                <label for="profileUrl" class="form-label">LinkedIn Profile URL</label>
+                                <input type="url" class="form-control url-input" id="profileUrl" 
+                                       placeholder="https://www.linkedin.com/in/username" required>
+                                <div class="form-text">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Enter the complete LinkedIn profile URL
+                                </div>
+                            </div>
+                            
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-linkedin btn-lg">
+                                    <span class="spinner-border spinner-border-sm me-2 d-none" id="singleSpinner"></span>
+                                    <i class="fas fa-search me-2" id="singleIcon"></i>
+                                    <span id="singleButtonText">Scrape Profile</span>
+                                </button>
+                            </div>
+                        </form>
+
+                        <!-- Progress -->
+                        <div class="progress-container" id="singleProgress">
+                            <div class="mt-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <small class="text-muted">Scraping Progress</small>
+                                    <small class="text-muted" id="singleProgressText">0%</small>
+                                </div>
+                                <div class="progress">
+                                    <div class="progress-bar bg-success" style="width: 0%" id="singleProgressBar"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Results -->
+                        <div id="singleResults" class="mt-3"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bulk Profile Scraper -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-users me-2"></i>Bulk Profile Scraper
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        
+                        <!-- File Upload -->
+                        <div class="mb-4">
+                            <div class="bulk-upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+                                <i class="fas fa-cloud-upload-alt fa-3x text-primary mb-3"></i>
+                                <h6>Upload URL List</h6>
+                                <p class="text-muted mb-2">Drop a .txt or .csv file here, or click to browse</p>
+                                <small class="text-muted">One URL per line</small>
+                            </div>
+                            
+                            <form id="bulkUploadForm" enctype="multipart/form-data" class="d-none">
+                                <input type="file" id="fileInput" name="file" accept=".txt,.csv" onchange="handleFileUpload(event)">
+                            </form>
+                        </div>
+
+                        <!-- Manual URL Entry -->
+                        <div class="mb-3">
+                            <label for="bulkUrls" class="form-label">Or Enter URLs Manually</label>
+                            <textarea class="form-control" id="bulkUrls" rows="4" 
+                                      placeholder="https://www.linkedin.com/in/profile1&#10;https://www.linkedin.com/in/profile2&#10;https://www.linkedin.com/in/profile3"></textarea>
+                            <div class="form-text">Enter one URL per line</div>
+                        </div>
+
+                        <!-- URL List Display -->
+                        <div id="urlListContainer" class="mb-3 d-none">
+                            <label class="form-label">URLs to Scrape (<span id="urlCount">0</span>)</label>
+                            <div class="url-list" id="urlList"></div>
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="button" class="btn btn-success btn-lg" id="bulkScrapeBtn" onclick="startBulkScraping()">
+                                <span class="spinner-border spinner-border-sm me-2 d-none" id="bulkSpinner"></span>
+                                <i class="fas fa-users me-2" id="bulkIcon"></i>
+                                <span id="bulkButtonText">Start Bulk Scraping</span>
+                            </button>
+                        </div>
+
+                        <!-- Bulk Progress -->
+                        <div class="progress-container" id="bulkProgress">
+                            <div class="mt-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <small class="text-muted">Bulk Scraping Progress</small>
+                                    <small class="text-muted" id="bulkProgressText">0/0</small>
+                                </div>
+                                <div class="progress">
+                                    <div class="progress-bar bg-success" style="width: 0%" id="bulkProgressBar"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bulk Results -->
+                        <div id="bulkResults" class="mt-3"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-history me-2"></i>Scraping Tips & Guidelines
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="text-primary">Best Practices</h6>
+                                <ul class="list-unstyled">
+                                    <li><i class="fas fa-check text-success me-2"></i>Use valid LinkedIn profile URLs</li>
+                                    <li><i class="fas fa-check text-success me-2"></i>Respect rate limits and delays</li>
+                                    <li><i class="fas fa-check text-success me-2"></i>Ensure you have proper permissions</li>
+                                    <li><i class="fas fa-check text-success me-2"></i>Monitor scraping progress</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="text-warning">Important Notes</h6>
+                                <ul class="list-unstyled">
+                                    <li><i class="fas fa-exclamation-triangle text-warning me-2"></i>Follow LinkedIn's Terms of Service</li>
+                                    <li><i class="fas fa-exclamation-triangle text-warning me-2"></i>Use scraped data responsibly</li>
+                                    <li><i class="fas fa-exclamation-triangle text-warning me-2"></i>Don't overload LinkedIn servers</li>
+                                    <li><i class="fas fa-exclamation-triangle text-warning me-2"></i>Keep delays between requests</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        let uploadedUrls = [];
+
+        // Single Profile Scraping
+        document.getElementById('singleProfileForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const url = document.getElementById('profileUrl').value.trim();
+            const spinner = document.getElementById('singleSpinner');
+            const icon = document.getElementById('singleIcon');
+            const buttonText = document.getElementById('singleButtonText');
+            const button = e.target.querySelector('button[type="submit"]');
+            const progressContainer = document.getElementById('singleProgress');
+            const resultsDiv = document.getElementById('singleResults');
+            
+            // Validate URL
+            if (!validateLinkedInUrl(url)) {
+                showAlert('danger', 'Please enter a valid LinkedIn profile URL');
+                return;
+            }
+            
+            // Show loading state
+            button.disabled = true;
+            spinner.classList.remove('d-none');
+            icon.classList.add('d-none');
+            buttonText.textContent = 'Scraping...';
+            progressContainer.style.display = 'block';
+            resultsDiv.innerHTML = '';
+            
+            // Simulate progress
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                progress += Math.random() * 20;
+                if (progress > 90) progress = 90;
+                updateProgress('single', progress);
+            }, 1000);
+            
+            try {
+                const response = await fetch('/api/scrape', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ url: url })
+                });
+                
+                const result = await response.json();
+                clearInterval(progressInterval);
+                updateProgress('single', 100);
+                
+                if (result.success) {
+                    resultsDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i>
+                            Profile scraping started successfully! Check the profiles page for results.
+                        </div>
+                    `;
+                    document.getElementById('profileUrl').value = '';
+                } else {
+                    resultsDiv.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            ${result.error}
+                        </div>
+                    `;
+                }
+                
+            } catch (error) {
+                clearInterval(progressInterval);
+                resultsDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-circle me-2"></i>
+                        Network error: ${error.message}
+                    </div>
+                `;
+            } finally {
+                // Reset button state
+                button.disabled = false;
+                spinner.classList.add('d-none');
+                icon.classList.remove('d-none');
+                buttonText.textContent = 'Scrape Profile';
+                
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                    updateProgress('single', 0);
+                }, 3000);
+            }
+        });
+
+        // File upload handling
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                const urls = text.split('\n')
+                    .map(url => url.trim())
+                    .filter(url => url && validateLinkedInUrl(url));
+                
+                if (urls.length > 0) {
+                    uploadedUrls = urls;
+                    displayUrlList(urls);
+                    showAlert('success', `Loaded ${urls.length} valid LinkedIn URLs`);
+                } else {
+                    showAlert('danger', 'No valid LinkedIn URLs found in file');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // Drag and drop handling
+        const uploadArea = document.getElementById('uploadArea');
+        
+        uploadArea.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', function(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (file.type === 'text/plain' || file.name.endsWith('.csv') || file.name.endsWith('.txt')) {
+                    const fakeEvent = { target: { files: [file] } };
+                    handleFileUpload(fakeEvent);
+                } else {
+                    showAlert('danger', 'Please drop a .txt or .csv file');
+                }
+            }
+        });
+
+        // Display URL list
+        function displayUrlList(urls) {
+            const container = document.getElementById('urlListContainer');
+            const urlList = document.getElementById('urlList');
+            const urlCount = document.getElementById('urlCount');
+            
+            urlCount.textContent = urls.length;
+            urlList.innerHTML = urls.map((url, index) => `
+                <div class="d-flex justify-content-between align-items-center py-1 ${index % 2 === 0 ? 'bg-light' : ''}">
+                    <small class="text-truncate">${url}</small>
+                    <button class="btn btn-sm btn-outline-danger" onclick="removeUrl(${index})">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `).join('');
+            
+            container.classList.remove('d-none');
+        }
+
+        // Remove URL from list
+        function removeUrl(index) {
+            uploadedUrls.splice(index, 1);
+            if (uploadedUrls.length > 0) {
+                displayUrlList(uploadedUrls);
+            } else {
+                document.getElementById('urlListContainer').classList.add('d-none');
+            }
+        }
+
+        // Bulk scraping
+        async function startBulkScraping() {
+            let urls = uploadedUrls.slice();
+            
+            // Add manual URLs
+            const manualUrls = document.getElementById('bulkUrls').value
+                .split('\n')
+                .map(url => url.trim())
+                .filter(url => url && validateLinkedInUrl(url));
+            
+            urls = [...urls, ...manualUrls];
+            
+            if (urls.length === 0) {
+                showAlert('danger', 'Please provide at least one valid LinkedIn URL');
+                return;
+            }
+            
+            const button = document.getElementById('bulkScrapeBtn');
+            const spinner = document.getElementById('bulkSpinner');
+            const icon = document.getElementById('bulkIcon');
+            const buttonText = document.getElementById('bulkButtonText');
+            const progressContainer = document.getElementById('bulkProgress');
+            const resultsDiv = document.getElementById('bulkResults');
+            
+            // Show loading state
+            button.disabled = true;
+            spinner.classList.remove('d-none');
+            icon.classList.add('d-none');
+            buttonText.textContent = 'Starting Bulk Scraping...';
+            progressContainer.style.display = 'block';
+            resultsDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch('/api/bulk-scrape', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ urls: urls })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    resultsDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i>
+                            Bulk scraping started for ${result.valid_urls.length} profiles!
+                            ${result.invalid_urls.length > 0 ? 
+                                `<br><small class="text-muted">${result.invalid_urls.length} invalid URLs skipped</small>` 
+                                : ''
+                            }
+                        </div>
+                    `;
+                    
+                    // Clear forms
+                    document.getElementById('bulkUrls').value = '';
+                    uploadedUrls = [];
+                    document.getElementById('urlListContainer').classList.add('d-none');
+                    
+                    // Simulate progress for bulk operation
+                    simulateBulkProgress(result.valid_urls.length);
+                    
+                } else {
+                    resultsDiv.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            ${result.error}
+                        </div>
+                    `;
+                }
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-circle me-2"></i>
+                        Network error: ${error.message}
+                    </div>
+                `;
+            } finally {
+                // Reset button state
+                button.disabled = false;
+                spinner.classList.add('d-none');
+                icon.classList.remove('d-none');
+                buttonText.textContent = 'Start Bulk Scraping';
+            }
+        }
+
+        // Simulate bulk progress
+        function simulateBulkProgress(totalUrls) {
+            let completed = 0;
+            const progressInterval = setInterval(() => {
+                completed += Math.random() * 2;
+                if (completed >= totalUrls) {
+                    completed = totalUrls;
+                    clearInterval(progressInterval);
+                    
+                    setTimeout(() => {
+                        document.getElementById('bulkProgress').style.display = 'none';
+                    }, 3000);
+                }
+                
+                const progress = (completed / totalUrls) * 100;
+                updateProgress('bulk', progress, `${Math.floor(completed)}/${totalUrls}`);
+            }, 2000);
+        }
+
+        // Update progress bars
+        function updateProgress(type, percentage, text = null) {
+            const progressBar = document.getElementById(`${type}ProgressBar`);
+            const progressText = document.getElementById(`${type}ProgressText`);
+            
+            progressBar.style.width = `${percentage}%`;
+            
+            if (text) {
+                progressText.textContent = text;
+            } else {
+                progressText.textContent = `${Math.round(percentage)}%`;
+            }
+        }
+
+        // Validate LinkedIn URL
+        function validateLinkedInUrl(url) {
+            const pattern = /^https:\/\/www\.linkedin\.com\/in\/[a-zA-Z0-9\-]+\/?$/;
+            return pattern.test(url);
+        }
+
+        // Show alert messages
+        function showAlert(type, message) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            const container = document.querySelector('.container');
+            container.insertBefore(alertDiv, container.children[1]);
+            
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+    </script>
+
+</body>
+</html>

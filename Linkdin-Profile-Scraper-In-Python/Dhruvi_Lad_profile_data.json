@@ -1,0 +1,85 @@
+{
+    "name": "Dhruvi Lad",
+    "url": "https://www.linkedin.com/in/dhruvi-lad-7a900b352/",
+    "headline": "Attended College of Agricultural Information Technology , Anand",
+    "about": "To leverage and further develop my skills in software development, Internet of Things (IoT), and data analysis by contributing to impactful and innovative projects in the IT industry. I aim to work in a dynamic and challenging environment that fosters continuous learning, encourages creative problem-solving, and allow me to make meaningful contributions to technological advancements.To leverage and further develop my skills in software development, Internet of Things (IoT), and data analysis by contributing to impactful and innovative projects in the IT industry. I aim to work in a dynamic and challenging environment that fosters continuous learning, encourages creative problem-solving, and allow me to make meaningful contributions to technological advancements.",
+    "experience": [
+        {
+            "company_name": "Job Title",
+            "designation": "Showcase your accomplishments and get up to 2X as many profile views and connections",
+            "duration": "",
+            "location": ""
+        },
+        {
+            "company_name": "2023 - present",
+            "designation": "Organization",
+            "duration": "",
+            "location": ""
+        }
+    ],
+    "education": [
+        {
+            "college": "College of Agricultural Information Technology , Anand",
+            "degree": "B.tech",
+            "duration": "Nov 2022 - Jul 2026"
+        },
+        {
+            "college": "Sanskar Bharti High School",
+            "degree": "HSC"
+        },
+        {
+            "college": "Sanskar Bharti High School",
+            "degree": "SSC"
+        }
+    ],
+    "licenses": [
+        {
+            "name": "Python",
+            "institute": "HackerRank",
+            "issued_date": "Issued Aug 2025"
+        },
+        {
+            "name": "SQL",
+            "institute": "HackerRank",
+            "issued_date": "Issued Aug 2025"
+        },
+        {
+            "name": "SQL new",
+            "institute": "United Latino Students Association",
+            "issued_date": "Issued Aug 2025"
+        },
+        {
+            "name": "Deloitte Australia - Cyber Job Simulation",
+            "institute": "Forage",
+            "issued_date": "Issued Jul 2025"
+        },
+        {
+            "name": "Deloitte Australia - Data Analytics Job Simulation",
+            "institute": "Forage",
+            "issued_date": "Issued Jul 2025"
+        },
+        {
+            "name": "TATA Group - Cybersecurity Analyst Job Simulation",
+            "institute": "Forage",
+            "issued_date": "Issued Jul 2025"
+        },
+        {
+            "name": "TATA Group - GenAI Powered Data Analytics Job Simulation",
+            "institute": "Forage",
+            "issued_date": "Issued Jul 2025"
+        },
+        {
+            "name": "Application of AI/ML Model for Specific Crop Acreage Mapping",
+            "institute": "Indian Institute of Remote Sensing (IIRS), Indian Space Research Organization (ISRO)",
+            "issued_date": "Issued Apr 2025"
+        },
+        {
+            "name": "Geodata Processing using Python and Machine Learning",
+            "institute": "Indian Institute of Remote Sensing (IIRS), Indian Space Research Organization (ISRO)",
+            "issued_date": "Issued Mar 2025"
+        }
+    ],
+    "projects": [],
+    "courses": [],
+    "honors_awards": []
+}

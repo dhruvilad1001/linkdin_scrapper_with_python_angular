@@ -1,0 +1,39 @@
+{
+    "name": "Yoganshi Jadav",
+    "url": "https://www.linkedin.com/in/yoganshijadav/",
+    "headline": "B.Tech Final Year Student | Web Developer | ASP.NET | SQL | Python Enthusiast",
+    "about": "A passionate and goal-oriented fresher with hands-on experience in developing web applications using Python, ASP.NET Framework, ASP.NET Core MVC and SQL Server. Eager to contribute to impactful IT projects, enhance technical proficiency, and grow into a capable full-stack developer within a dynamic and innovative organization.A passionate and goal-oriented fresher with hands-on experience in developing web applications using Python, ASP.NET Framework, ASP.NET Core MVC and SQL Server. Eager to contribute to impactful IT projects, enhance technical proficiency, and grow into a capable full-stack developer within a dynamic and innovative organization.",
+    "experience": [],
+    "education": [
+        {
+            "college": "College of Agricultural Information Technology , Anand",
+            "degree": "B.Tech",
+            "duration": "Oct 2022 - Jun 2026"
+        },
+        {
+            "college": "M.D.M Kanya Vidhya Mandir, Dhrangadhra",
+            "degree": "SSC",
+            "duration": "2020"
+        },
+        {
+            "college": "Sadhana Vidhyalaya, Dhrangadhra",
+            "degree": "HSC",
+            "duration": "2022"
+        }
+    ],
+    "licenses": [
+        {
+            "name": "Application of AI/ML Model for Specific Crop Acreage Mapping",
+            "institute": "Indian Institute of Remote Sensing (IIRS), Indian Space Research Organization (ISRO)",
+            "issued_date": "Issued Apr 2025"
+        },
+        {
+            "name": "Geodata Processing using Python and Machine Learning",
+            "institute": "Indian Institute of Remote Sensing (IIRS), Indian Space Research Organization (ISRO)",
+            "issued_date": "Issued Mar 2025"
+        }
+    ],
+    "projects": [],
+    "courses": [],
+    "honors_awards": []
+}

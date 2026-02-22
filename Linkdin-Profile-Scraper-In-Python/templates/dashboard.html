@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkedIn Profile Scraper - Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand {
+            font-weight: bold;
+            color: #0077b5 !important;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .stat-card.companies {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        .stat-card.schools {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        .stat-card.today {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        }
+        .recent-profile-card {
+            border-left: 4px solid #0077b5;
+        }
+        .btn-linkedin {
+            background-color: #0077b5;
+            border-color: #0077b5;
+            color: white;
+        }
+        .btn-linkedin:hover {
+            background-color: #005885;
+            border-color: #005885;
+            color: white;
+        }
+        .quick-actions {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .activity-item {
+            border-bottom: 1px solid #eee;
+            padding: 10px 0;
+        }
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-white shadow-sm">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+                <i class="fab fa-linkedin me-2"></i>LinkedIn Scraper Pro
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active text-dark" href="{{ url_for('dashboard') }}">
+                            <i class="fas fa-tachometer-alt me-1"></i>Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" href="{{ url_for('profiles') }}">
+                            <i class="fas fa-users me-1"></i>Profiles
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" href="{{ url_for('scraper') }}">
+                            <i class="fas fa-search me-1"></i>Scraper
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" href="{{ url_for('analytics') }}">
+                            <i class="fas fa-chart-bar me-1"></i>Analytics
+                        </a>
+                    </li>
+                </ul>
+                <div class="navbar-text text-dark">
+                    <small>Total Profiles: <strong>{{ global_stats.total_profiles | format_number }}</strong></small>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="row mb-4">
+                    <div class="col-12">
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <!-- Quick Actions -->
+        <div class="row">
+            <div class="col-12">
+                <div class="quick-actions">
+                    <h4 class="mb-3"><i class="fas fa-bolt me-2"></i>Quick Actions</h4>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <a href="{{ url_for('scraper') }}" class="btn btn-light w-100">
+                                <i class="fas fa-plus me-2"></i>Add Profile
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-light w-100" onclick="exportProfiles('grouped')">
+                                <i class="fas fa-download me-2"></i>Export Excel
+                            </button>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{{ url_for('profiles') }}" class="btn btn-light w-100">
+                                <i class="fas fa-list me-2"></i>View All
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-light w-100" onclick="refreshStats()">
+                                <i class="fas fa-sync me-2"></i>Refresh
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card stat-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-users fa-2x mb-3"></i>
+                        <h3 class="card-title">{{ stats.total_profiles | format_number }}</h3>
+                        <p class="card-text">Total Profiles</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card today">
+                    <div class="card-body text-center">
+                        <i class="fas fa-calendar-day fa-2x mb-3"></i>
+                        <h3 class="card-title">{{ stats.today_profiles | format_number }}</h3>
+                        <p class="card-text">Added Today</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card companies">
+                    <div class="card-body text-center">
+                        <i class="fas fa-building fa-2x mb-3"></i>
+                        <h3 class="card-title">{{ stats.top_companies | length }}</h3>
+                        <p class="card-text">Companies</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card schools">
+                    <div class="card-body text-center">
+                        <i class="fas fa-graduation-cap fa-2x mb-3"></i>
+                        <h3 class="card-title">{{ stats.top_schools | length }}</h3>
+                        <p class="card-text">Universities</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="row">
+            <!-- Recent Profiles -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-clock me-2"></i>Recent Profiles
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        {% if recent_profiles %}
+                            {% for profile in recent_profiles %}
+                                <div class="recent-profile-card p-3 {% if not loop.last %}border-bottom{% endif %}">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-1">
+                                                <a href="{{ url_for('profile_detail', profile_id=profile._id) }}" 
+                                                   class="text-decoration-none">
+                                                    {{ profile.name }}
+                                                </a>
+                                            </h6>
+                                            <p class="text-muted small mb-1">
+                                                {{ profile.headline | truncate_text(60) }}
+                                            </p>
+                                            <small class="text-muted">
+                                                <i class="fas fa-clock me-1"></i>
+                                                {{ profile.last_updated | datetime_format }}
+                                            </small>
+                                        </div>
+                                        <div class="ms-3">
+                                            <a href="{{ profile.url }}" target="_blank" 
+                                               class="btn btn-sm btn-outline-primary">
+                                                <i class="fab fa-linkedin"></i>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="p-4 text-center text-muted">
+                                <i class="fas fa-info-circle fa-2x mb-3"></i>
+                                <p>No profiles found. Start by scraping some profiles!</p>
+                                <a href="{{ url_for('scraper') }}" class="btn btn-linkedin">
+                                    <i class="fas fa-plus me-2"></i>Add First Profile
+                                </a>
+                            </div>
+                        {% endif %}
+                    </div>
+                    {% if recent_profiles %}
+                        <div class="card-footer text-center">
+                            <a href="{{ url_for('profiles') }}" class="btn btn-linkedin btn-sm">
+                                <i class="fas fa-list me-2"></i>View All Profiles
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Top Companies & Schools -->
+            <div class="col-lg-6">
+                <div class="row">
+                    <!-- Top Companies -->
+                    <div class="col-12 mb-4">
+                        <div class="card">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-building me-2"></i>Top Companies
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                {% if stats.top_companies %}
+                                    {% for company in stats.top_companies[:5] %}
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <span class="text-truncate">{{ company._id or 'Unknown' }}</span>
+                                            <span class="badge bg-primary">{{ company.count }}</span>
+                                        </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <p class="text-muted text-center">No company data available</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Top Schools -->
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header bg-success text-white">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-graduation-cap me-2"></i>Top Universities
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                {% if stats.top_schools %}
+                                    {% for school in stats.top_schools[:5] %}
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <span class="text-truncate">{{ school._id or 'Unknown' }}</span>
+                                            <span class="badge bg-success">{{ school.count }}</span>
+                                        </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <p class="text-muted text-center">No education data available</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+
+    <script>
+        // Export profiles function
+        async function exportProfiles(format = 'grouped') {
+            try {
+                const response = await fetch('/api/export', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ format: format })
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `linkedin_profiles_${format}_${new Date().toISOString().split('T')[0]}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    showAlert('success', 'Export completed successfully!');
+                } else {
+                    const error = await response.json();
+                    showAlert('danger', 'Export failed: ' + (error.error || 'Unknown error'));
+                }
+            } catch (error) {
+                showAlert('danger', 'Export failed: ' + error.message);
+            }
+        }
+
+        // Refresh statistics
+        async function refreshStats() {
+            try {
+                const response = await fetch('/api/stats');
+                if (response.ok) {
+                    location.reload(); // Simple refresh for now
+                } else {
+                    showAlert('warning', 'Failed to refresh statistics');
+                }
+            } catch (error) {
+                showAlert('danger', 'Error refreshing statistics: ' + error.message);
+            }
+        }
+
+        // Show alert messages
+        function showAlert(type, message) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            const container = document.querySelector('.container');
+            container.insertBefore(alertDiv, container.firstChild);
+            
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+
+        // Auto-refresh stats every 5 minutes
+        setInterval(refreshStats, 5 * 60 * 1000);
+    </script>
+
+</body>
+</html>

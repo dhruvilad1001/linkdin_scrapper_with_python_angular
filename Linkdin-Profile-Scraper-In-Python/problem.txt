@@ -1,0 +1,14 @@
+task 1
+
+problem in experinace section in linkdin there are experinace section have some times bullte road path but my project only scarp main title not whole bullet road path .
+xpath of title which scarpped successfully is "/html/body/div[6]/div[3]/div/div/div[2]/div/div/main/section[5]/div[3]/ul/li[2]/div/div[2]/div[1]/a/div/div/div/div/span[1]" but sub titile or bullet road path which not scarpped are "/html/body/div[6]/div[3]/div/div/div[2]/div/div/main/section[5]/div[3]/ul/li[2]/div/div[2]/div[2]/ul/li[1]/div/div[2]/div[1]/a/div/div/div/div/span[1]" and "/html/body/div[6]/div[3]/div/div/div[2]/div/div/main/section[5]/div[3]/ul/li[2]/div/div[2]/div[2]/ul/li[2]/div/div[2]/div[1]/a/div/div/div/div/span[1]" there are no fix if all main titlt e have sub title / bullet path and there are no fix number of subtitle and road path bullets so make a logic to scrap this
+
+---------------------------------------------------------------
+task 2
+
+now second problem is seal options in experience section some rare user have see all option in experience section now 
+so manage that logic and try to scarp if user have see moore in experience section 
+
+
+---------------------------------------------------------------task 3
+

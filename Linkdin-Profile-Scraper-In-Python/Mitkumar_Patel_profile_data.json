@@ -1,0 +1,107 @@
+{
+    "name": "Mitkumar Patel",
+    "url": "https://www.linkedin.com/in/mitkumar-patel-031917266/",
+    "headline": "Student at @Nirma University (M.tech-CSE)|| cyber security || AAU-AIT(B.Tech)|| IIRS-ISRO || PYTHON || Machine learning || Networking",
+    "about": "I aspire to secure a position with a leading company to enhance my programming skills, gain insights into emerging trends, explore advancements in the IT field, and gain practical experience and research exposure in developing innovative technologiesI aspire to secure a position with a leading company to enhance my programming skills, gain insights into emerging trends, explore advancements in the IT field, and gain practical experience and research exposure in developing innovative technologies",
+    "experience": [
+        {
+            "company_name": "Nirma University",
+            "designation": "Teaching Assistant",
+            "duration": "Aug 2024 to Present \u00b7 1 yr 2 mos",
+            "location": "Ahmedabad, Gujarat, India \u00b7 On-site"
+        },
+        {
+            "company_name": "Sarjen Systems Pvt. Ltd.",
+            "designation": "Software Developer",
+            "duration": "Jan 2024 to Jun 2024 \u00b7 6 mos",
+            "location": "6th Floor, Arista, Anandnagar road, Ahmedabad 380015, India \u00b7 On-site"
+        },
+        {
+            "company_name": "Mit Patel- Joining Intent Letter.pdf",
+            "designation": "",
+            "duration": "",
+            "location": ""
+        }
+    ],
+    "education": [
+        {
+            "college": "Nirma University",
+            "degree": "Master of Technology - MTech(cyber security)",
+            "duration": "Jul 2024",
+            "grade": "Grade: SEM-2 first class with distinction (8.67)"
+        },
+        {
+            "college": "Anand Agricultural University, Anand",
+            "degree": "Bachelor of Technology - BTech",
+            "duration": "Nov 2020 - Jun 2024",
+            "grade": "Grade: A"
+        },
+        {
+            "college": "Lok Vidhyalay,Untdi",
+            "degree": "H.S.C, Mathematics and Computer Science",
+            "duration": "Jun 2019 - Jun 2020",
+            "grade": "Grade: 7.7"
+        },
+        {
+            "college": "M.G.PATEL ADARSH SARVAJANIK HIGH SCHOOL",
+            "degree": "S.S.C, 10",
+            "duration": "Jun 2017 - Mar 2018",
+            "grade": "Grade: 8.5"
+        }
+    ],
+    "licenses": [
+        {
+            "name": "Deloitte Australia - Cyber Job Simulation",
+            "institute": "Forage",
+            "issued_date": "Issued Jul 2025"
+        },
+        {
+            "name": "AWS Academy Graduate - AWS Academy Cloud Security Foundations",
+            "institute": "Amazon Web Services (AWS)",
+            "issued_date": "Issued Nov 2024"
+        },
+        {
+            "name": "Geoprocessing using Python (WgCAPD)",
+            "institute": "Indian Institute of Remote Sensing (IIRS), Indian Space Research Organization (ISRO)",
+            "issued_date": "Issued Jul 2023"
+        },
+        {
+            "name": "Introduction to Data Science",
+            "institute": "Cisco",
+            "issued_date": "Issued Jul 2023"
+        },
+        {
+            "name": "Python for Data Science, AI & Development",
+            "institute": "Coursera",
+            "issued_date": "Issued Jul 2023"
+        },
+        {
+            "name": "Programming Using Python",
+            "institute": "HCL GUVI",
+            "issued_date": "Issued Jun 2023"
+        },
+        {
+            "name": "Basics of Machine Learning",
+            "institute": "Great Learning",
+            "issued_date": "Issued Jun 2023"
+        },
+        {
+            "name": "Developing Back-End Apps with Node.js and Express",
+            "institute": "Coursera",
+            "issued_date": "Issued Jun 2023"
+        },
+        {
+            "name": "Geodata Processing using Python",
+            "institute": "Indian Institute of Remote Sensing (IIRS), Indian Space Research Organization (ISRO)",
+            "issued_date": "Issued Feb 2023"
+        },
+        {
+            "name": "Applications of Remote Sensing and GIS Technology",
+            "institute": "Indian Institute of Remote Sensing (IIRS), Indian Space Research Organization (ISRO)",
+            "issued_date": "Issued Sep 2022"
+        }
+    ],
+    "projects": [],
+    "courses": [],
+    "honors_awards": []
+}

@@ -1,0 +1,59 @@
+{
+    "name": "Vraj Maheshwari",
+    "url": "https://www.linkedin.com/in/vraj-maheshwari-6537ba278/",
+    "headline": "Python Devloper|| Full Stack Developer || PHP ||  AI/ML & Cybersecurity  Explorer || .NET Core MVC || React || SQL  ||  B.Tech IT Final Year || #Google ambassador of college",
+    "about": "Final-year B.Tech student in Agricultural Information Technology with a strong foundation in software development. Passionate about Software Development, AI/ML, and Cybersecurity. Eager to start a professional career as a software developer where I can contribute to impactful projects, continue learning, and grow into a leadership role. Actively seeking opportunities in IT or software development to apply my technical skills and develop professionally.Final-year B.Tech student in Agricultural Information Technology with a strong foundation in software\n development. Passionate about Software Development, AI/ML, and Cybersecurity. Eager to start a\n professional career as a software developer where I can contribute to impactful projects, continue learning,\n and grow into a leadership role. Actively seeking opportunities in IT or software development to apply my\n technical skills and develop professionally.",
+    "experience": [
+        {
+            "company_name": "Sarjen Systems Pvt. Ltd. \u00b7 Trainee",
+            "designation": "Training Program Participant",
+            "duration": "Mar 2025 to May 2025 \u00b7 3 mos",
+            "location": "Ahmedabad, Gujarat, India"
+        }
+    ],
+    "education": [
+        {
+            "college": "College of Agricultural Information Technology , Anand",
+            "degree": "Bachelor of Technology - BTech, Agricultural information technology",
+            "duration": "Sep 2022 - Oct 2026",
+            "grade": "Grade: 8.22"
+        },
+        {
+            "college": "New English school nadiad",
+            "degree": "Jun 2022",
+            "duration": "Grade: 95.95pr"
+        }
+    ],
+    "licenses": [
+        {
+            "name": "Deloitte Australia - Data Analytics Job Simulation",
+            "institute": "Forage",
+            "issued_date": "Issued Sep 2025"
+        }
+    ],
+    "projects": [
+        {
+            "project_name": "AI Chat Agent",
+            "duration": "A backend system for an AI-powered chat agent with user authentication, chat history, and smart Q&A handling. Uses vector search with ChromaDB and LLM-based fallback via Together.AI for dynamic responses.",
+            "description": "Skills: Python programming \u00b7 MongoDB \u00b7 REST APIs \u00b7 React.js \u00b7 chromadb"
+        },
+        {
+            "project_name": "Facial Recognition Attendance System",
+            "duration": "Associated with College of Agricultural Information Technology , Anand",
+            "description": "Automated attendance system using facial recognition with KNN model trained on 100+ images per student.",
+            "skills": "Skills: Python programming \u00b7 OpenCV \u00b7 yolo \u00b7 Flask \u00b7 sqlserver \u00b7 AIML"
+        },
+        {
+            "project_name": "Leave Application Management System",
+            "duration": "Associated with College of Agricultural Information Technology , Anand",
+            "description": "Web-based platform for students to apply for leave and admins to manage applications with SMTP notifications and IP logging.",
+            "skills": "Skills: PHP \u00b7 boostrap \u00b7 sqlserver \u00b7 Web Development"
+        },
+        {
+            "project_name": "Windows Ports Scanner",
+            "duration": "A comprehensive port scanner tool that scans all ports on your PC and displays what services are running on each port."
+        }
+    ],
+    "courses": [],
+    "honors_awards": []
+}

@@ -1,0 +1,48 @@
+{
+    "name": "Pankaj Sonagara",
+    "url": "https://www.linkedin.com/in/pankaj-sonagara/",
+    "headline": "Sr. Design Engineer-Civil| Larsen & Toubro Energy Hydrocarbon | M.E. Structural Engg.",
+    "about": null,
+    "experience": [
+        {
+            "company_name": "L&T Energy Hydrocarbon",
+            "designation": "Sr. Design Engineer-Civil",
+            "duration": "Sep 2024 to Present \u00b7 1 yr 1 mo",
+            "location": "Vadodara, Gujarat, India"
+        },
+        {
+            "company_name": "L&T Construction",
+            "designation": "Sr. Design Engineer-Civil",
+            "duration": "Jul 2024 to Oct 2024 \u00b7 4 mos",
+            "location": "India"
+        },
+        {
+            "company_name": "Larsen & Toubro",
+            "designation": "PGET - Design",
+            "duration": "Jul 2023 to Jul 2024 \u00b7 1 yr 1 mo",
+            "location": "Surat, Gujarat, India \u00b7 On-site"
+        },
+        {
+            "company_name": "",
+            "designation": "MAHSR C4, TFL Office, Surat",
+            "duration": "",
+            "location": ""
+        }
+    ],
+    "education": [
+        {
+            "college": "The Maharaja Sayajirao University of Baroda",
+            "degree": "Master of Engineering, Structural Engineering",
+            "duration": "2021 - 2023"
+        },
+        {
+            "college": "The Maharaja Sayajirao University of Baroda",
+            "degree": "Bachelor of Engineering - BE, Civil Engineering",
+            "duration": "2017 - 2021"
+        }
+    ],
+    "licenses": [],
+    "projects": [],
+    "courses": [],
+    "honors_awards": []
+}

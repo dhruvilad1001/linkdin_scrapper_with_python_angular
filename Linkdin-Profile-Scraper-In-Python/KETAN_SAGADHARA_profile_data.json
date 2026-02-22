@@ -1,0 +1,58 @@
+{
+    "name": "KETAN SAGADHARA",
+    "url": "https://www.linkedin.com/in/ketan-sagadhara-176a41309/",
+    "headline": "Full Stack Developer | ASP.NET Core MVC & ReactJS | AI & Startup Enthusiast | B.Tech Agri IT '26",
+    "about": "Full Stack Developer skilled in building end-to-end web applications using ASP.NET Core MVC and ReactJS. I bring together clean frontend design with solid backend logic, turning ideas into real, working solutions. Currently pursuing B.Tech in Agri IT (2026) and always eager to code, learn, and create.Full Stack Developer skilled in building end-to-end web applications using ASP.NET Core MVC and ReactJS. I bring together clean frontend design with solid backend logic, turning ideas into real, working solutions. Currently pursuing B.Tech in Agri IT (2026) and always eager to code, learn, and create.",
+    "experience": [
+        {
+            "company_name": "Sarjen Systems Pvt. Ltd. \u00b7 Trainee",
+            "designation": "Trainee at Sarjen Systems",
+            "duration": "Mar 2025 to Jun 2025 \u00b7 4 mos",
+            "location": "On-site"
+        },
+        {
+            "company_name": "Certificate.jpg",
+            "designation": "",
+            "duration": "",
+            "location": ""
+        },
+        {
+            "company_name": "",
+            "designation": "Successfully completed the \u201cCodeCrafters \u2013 Next Gen Development\u201d training program.",
+            "duration": "",
+            "location": ""
+        }
+    ],
+    "education": [
+        {
+            "college": "College of Agricultural Information Technology , Anand",
+            "degree": "B.Tech in Agricultural Information Technology , Anand Gujarat India",
+            "duration": "Oct 2022 - Jun 2026"
+        }
+    ],
+    "licenses": [
+        {
+            "name": "CCD 2025",
+            "institute": "GDG Cloud Rajkot",
+            "issued_date": "Issued May 2025"
+        },
+        {
+            "name": "Fundamentals of DevOps",
+            "institute": "HCL GUVI",
+            "issued_date": "Issued May 2025"
+        },
+        {
+            "name": "Application of AI/ML Model for Specific Crop Acreage Mapping",
+            "institute": "Indian Institute of Remote Sensing (IIRS), Indian Space Research Organization (ISRO)",
+            "issued_date": "Issued Apr 2025"
+        },
+        {
+            "name": "Geodata Processing using Python and Machine Learning",
+            "institute": "Indian Institute of Remote Sensing (IIRS), Indian Space Research Organization (ISRO)",
+            "issued_date": "Issued Mar 2025"
+        }
+    ],
+    "projects": [],
+    "courses": [],
+    "honors_awards": []
+}

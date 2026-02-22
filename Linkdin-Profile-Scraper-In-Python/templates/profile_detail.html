@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ profile.name }} - Profile Details</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand {
+            font-weight: bold;
+            color: #0077b5 !important;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .profile-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            border-radius: 15px;
+            position: relative;
+        }
+        .profile-avatar {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            font-weight: bold;
+            color: #667eea;
+            border: 5px solid white;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        .btn-linkedin {
+            background-color: #0077b5;
+            border-color: #0077b5;
+            color: white;
+        }
+        .btn-linkedin:hover {
+            background-color: #005885;
+            border-color: #005885;
+            color: white;
+        }
+        .section-header {
+            border-left: 4px solid #0077b5;
+            padding-left: 15px;
+            margin-bottom: 20px;
+        }
+        .experience-item, .education-item, .project-item {
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border-left: 3px solid #0077b5;
+        }
+        .timeline-dot {
+            width: 12px;
+            height: 12px;
+            background: #0077b5;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .badge-custom {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            margin-right: 5px;
+            margin-bottom: 5px;
+            display: inline-block;
+        }
+        .info-item {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-white shadow-sm">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+                <i class="fab fa-linkedin me-2"></i>LinkedIn Scraper Pro
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" href="{{ url_for('dashboard') }}">
+                            <i class="fas fa-tachometer-alt me-1"></i>Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" href="{{ url_for('profiles') }}">
+                            <i class="fas fa-users me-1"></i>Profiles
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" href="{{ url_for('scraper') }}">
+                            <i class="fas fa-search me-1"></i>Scraper
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" href="{{ url_for('analytics') }}">
+                            <i class="fas fa-chart-bar me-1"></i>Analytics
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4 mb-5">
+
+        <!-- Back Button -->
+        <div class="mb-3">
+            <a href="{{ url_for('profiles') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Profiles
+            </a>
+        </div>
+
+        <!-- Profile Header -->
+        <div class="profile-header mb-4">
+            <div class="row align-items-center">
+                <div class="col-md-8 d-flex align-items-center">
+                    <div class="profile-avatar me-4">
+                        {{ profile.name[0] if profile.name else '?' }}
+                    </div>
+                    <div>
+                        <h1 class="mb-2">{{ profile.name or 'N/A' }}</h1>
+                        <p class="lead mb-3">{{ profile.headline or 'No headline available' }}</p>
+                        <div>
+                            <span class="badge bg-white text-primary me-2">
+                                <i class="fas fa-briefcase me-1"></i>
+                                {{ profile.experience | length if profile.experience else 0 }} Experiences
+                            </span>
+                            <span class="badge bg-white text-success me-2">
+                                <i class="fas fa-graduation-cap me-1"></i>
+                                {{ profile.education | length if profile.education else 0 }} Education
+                            </span>
+                            <span class="badge bg-white text-info">
+                                <i class="fas fa-project-diagram me-1"></i>
+                                {{ profile.projects | length if profile.projects else 0 }} Projects
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                    <a href="{{ profile.url }}" target="_blank" class="btn btn-light btn-lg mb-2 d-block d-md-inline-block">
+                        <i class="fab fa-linkedin me-2"></i>View on LinkedIn
+                    </a>
+                    <!-- <button class="btn btn-outline-light d-block d-md-inline-block" onclick="rescrapeProfile()">
+                        <i class="fas fa-sync-alt me-2"></i>Re-scrape
+                    </button> -->
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            
+            <!-- Left Column -->
+            <div class="col-lg-8">
+
+                <!-- About Section -->
+                {% if profile.about %}
+                <div class="card">
+                    <div class="card-body">
+                        <div class="section-header">
+                            <h4><i class="fas fa-user-circle me-2 text-primary"></i>About</h4>
+                        </div>
+                        <p class="text-muted">{{ profile.about }}</p>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Experience Section -->
+                {% if profile.experience %}
+                <div class="card">
+                    <div class="card-body">
+                        <div class="section-header">
+                            <h4><i class="fas fa-briefcase me-2 text-primary"></i>Experience</h4>
+                        </div>
+                        {% for exp in profile.experience %}
+                        <div class="experience-item">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <h5 class="mb-1">{{ exp.designation or 'N/A' }}</h5>
+                                    <h6 class="text-muted mb-2">
+                                        <i class="fas fa-building me-2"></i>
+                                        {{ exp.company_name or 'N/A' }}
+                                    </h6>
+                                </div>
+                                {% if exp.role %}
+                                <span class="badge bg-primary">{{ exp.role }}</span>
+                                {% endif %}
+                            </div>
+                            
+                            {% if exp.duration %}
+                            <p class="text-muted mb-2">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                <span class="timeline-dot"></span>
+                                {{ exp.duration }}
+                            </p>
+                            {% endif %}
+                            
+                            {% if exp.location %}
+                            <p class="text-muted mb-0">
+                                <i class="fas fa-map-marker-alt me-2"></i>
+                                {{ exp.location }}
+                            </p>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Education Section -->
+                {% if profile.education %}
+                <div class="card">
+                    <div class="card-body">
+                        <div class="section-header">
+                            <h4><i class="fas fa-graduation-cap me-2 text-success"></i>Education</h4>
+                        </div>
+                        {% for edu in profile.education %}
+                        <div class="education-item">
+                            <h5 class="mb-1">{{ edu.college or 'N/A' }}</h5>
+                            
+                            {% if edu.degree %}
+                            <h6 class="text-muted mb-2">{{ edu.degree }}</h6>
+                            {% endif %}
+                            
+                            {% if edu.duration %}
+                            <p class="text-muted mb-2">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                <span class="timeline-dot"></span>
+                                {{ edu.duration }}
+                            </p>
+                            {% endif %}
+                            
+                            {% if edu.grade %}
+                            <p class="mb-0">
+                                <span class="badge bg-success">{{ edu.grade }}</span>
+                            </p>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Projects Section -->
+                {% if profile.projects %}
+                <div class="card">
+                    <div class="card-body">
+                        <div class="section-header">
+                            <h4><i class="fas fa-project-diagram me-2 text-info"></i>Projects</h4>
+                        </div>
+                        {% for project in profile.projects %}
+                        <div class="project-item">
+                            <h5 class="mb-2">{{ project.project_name or 'N/A' }}</h5>
+                            
+                            {% if project.duration %}
+                            <p class="text-muted mb-2">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                {{ project.duration }}
+                            </p>
+                            {% endif %}
+                            
+                            {% if project.description %}
+                            <p class="mb-2">{{ project.description }}</p>
+                            {% endif %}
+                            
+                            {% if project.skills %}
+                            <div>
+                                {% for skill in project.skills.split(',') %}
+                                <span class="badge-custom bg-info text-white">{{ skill.strip() }}</span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+            </div>
+
+            <!-- Right Column -->
+            <div class="col-lg-4">
+
+                <!-- Profile Info -->
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Profile Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="info-item">
+                            <small class="text-muted d-block mb-1">LinkedIn URL</small>
+                            <a href="{{ profile.url }}" target="_blank" class="text-decoration-none">
+                                <i class="fab fa-linkedin me-1"></i>View Profile
+                            </a>
+                        </div>
+                        
+                        <div class="info-item">
+                            <small class="text-muted d-block mb-1">Last Updated</small>
+                            <i class="fas fa-clock me-1"></i>
+                            {{ profile.last_updated | datetime_format }}
+                        </div>
+                        
+                        {% if profile.scraped_at %}
+                        <div class="info-item">
+                            <small class="text-muted d-block mb-1">First Scraped</small>
+                            <i class="fas fa-calendar-plus me-1"></i>
+                            {{ profile.scraped_at | datetime_format }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Certifications -->
+                {% if profile.licenses %}
+                <div class="card">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0">
+                            <i class="fas fa-certificate me-2"></i>
+                            Certifications ({{ profile.licenses | length }})
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        {% for cert in profile.licenses %}
+                        <div class="mb-3 pb-3 {% if not loop.last %}border-bottom{% endif %}">
+                            <h6 class="mb-1">{{ cert.name or 'N/A' }}</h6>
+                            {% if cert.institute %}
+                            <small class="text-muted d-block">{{ cert.institute }}</small>
+                            {% endif %}
+                            {% if cert.issued_date %}
+                            <small class="text-muted d-block">
+                                <i class="fas fa-calendar me-1"></i>{{ cert.issued_date }}
+                            </small>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Courses -->
+                {% if profile.courses %}
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-book me-2"></i>
+                            Courses ({{ profile.courses | length }})
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        {% for course in profile.courses %}
+                        <div class="mb-2 pb-2 {% if not loop.last %}border-bottom{% endif %}">
+                            <small class="d-block fw-bold">{{ course.course_name or 'N/A' }}</small>
+                            {% if course.associated_with %}
+                            <small class="text-muted">{{ course.associated_with }}</small>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Honors & Awards -->
+                {% if profile.honors_awards %}
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-award me-2"></i>
+                            Honors & Awards ({{ profile.honors_awards | length }})
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        {% for award in profile.honors_awards %}
+                        <div class="mb-3 pb-3 {% if not loop.last %}border-bottom{% endif %}">
+                            <h6 class="mb-1">{{ award.award_name or 'N/A' }}</h6>
+                            {% if award.issued_by %}
+                            <small class="text-muted d-block">Issued by: {{ award.issued_by }}</small>
+                            {% endif %}
+                            {% if award.issued_date %}
+                            <small class="text-muted d-block">
+                                <i class="fas fa-calendar me-1"></i>{{ award.issued_date }}
+                            </small>
+                            {% endif %}
+                            {% if award.associated_with %}
+                            <small class="text-muted d-block">{{ award.associated_with }}</small>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Re-scrape profile
+        async function rescrapeProfile() {
+    if (!confirm("Re-scrape this profile? This will update all information.")) {
+        return;
+    }
+
+    const profileUrl = "{{ profile.url }}";  // <<< FIXED
+
+    try {
+        showAlert("info", "Re-scraping profile...");
+
+        const resp = await fetch("/api/scrape", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: profileUrl })
+        });
+
+        const contentType = resp.headers.get("content-type") || "";
+
+        let result;
+        if (contentType.includes("application/json")) {
+            result = await resp.json();
+        } else {
+            const text = await resp.text();
+            showAlert("danger", "Server returned non-JSON response. Check console.");
+            console.error("HTML error from backend:", text);
+            return;
+        }
+
+        if (resp.ok && result.success) {
+            showAlert("success", "Profile re-scraped successfully! Refreshing...");
+            setTimeout(() => window.location.reload(), 1500);
+        } else {
+            showAlert("danger", "Failed: " + (result.error || result.message));
+        }
+
+    } catch (err) {
+        showAlert("danger", "Error: " + err.message);
+    }
+}
+
+
+        // Show alert messages
+        function showAlert(type, message) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
+            alertDiv.style.zIndex = '9999';
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(alertDiv);
+            
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+    </script>
+
+</body>
+</html>

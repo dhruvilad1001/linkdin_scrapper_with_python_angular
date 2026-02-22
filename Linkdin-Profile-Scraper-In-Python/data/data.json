@@ -1,0 +1,14 @@
+[
+  {
+    "name": "John Doe",
+    "age": 30,
+    "city": "New York",
+    "url": "https://www.linkedin.com/in/john-doe"
+  },
+  {
+    "name": "Jane Smith",
+    "age": 25,
+    "city": "London",
+    "url": "https://www.linkedin.com/in/jane-smith"
+  }
+]

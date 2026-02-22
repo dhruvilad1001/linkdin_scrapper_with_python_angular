@@ -1,0 +1,602 @@
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkedIn Profiles</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-white shadow-sm">
+        <div class="container">
+            <a class="navbar-brand text-primary" href="/">
+                <i class="fab fa-linkedin me-2"></i>LinkedIn Scraper Pro
+            </a>
+            <div class="navbar-nav">
+                <a class="nav-link text-dark" href="/">Dashboard</a>
+                <a class="nav-link text-dark" href="/scraper">Scraper</a>
+                <a class="nav-link active text-dark" href="/profiles">Profiles</a>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="container mt-4">
+        <h2>All Profiles</h2>
+        <p>Profile listing page - Coming soon!</p>
+        <a href="/" class="btn btn-primary">Back to Dashboard</a>
+    </div>
+</body>
+</html> -->
+
+
+
+
+
+<!-- SUCCESS CODE -->
+
+<!-- Replace the profiles.html content -->
+ <!-- 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkedIn Profiles</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-white shadow-sm">
+        <div class="container">
+            <a class="navbar-brand text-primary" href="/">
+                <i class="fab fa-linkedin me-2"></i>LinkedIn Scraper Pro
+            </a>
+            <div class="navbar-nav">
+                <a class="nav-link text-dark" href="/">Dashboard</a>
+                <a class="nav-link text-dark" href="/scraper">Scraper</a>
+                <a class="nav-link active text-dark" href="/profiles">Profiles</a>
+                <a class="nav-link text-dark" href="/analytics">Analytics</a>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">All LinkedIn Profiles</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if profiles %}
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Headline</th>
+                                            <th>URL</th>
+                                            <th>Last Updated</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for profile in profiles %}
+                                        <tr>
+                                            <td><strong>{{ profile.name or 'N/A' }}</strong></td>
+                                            <td>{{ profile.headline or 'N/A' }}</td>
+                                            <td>
+                                                <a href="{{ profile.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                                    View LinkedIn
+                                                </a>
+                                            </td>
+                                            <td>{{ profile.last_updated or 'N/A' }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="text-center">
+                                <p>No profiles found. Start scraping some profiles!</p>
+                                <a href="/scraper" class="btn btn-primary">Start Scraping</a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+ -->
+
+
+ <!-- New Trial --> 
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkedIn Profiles - All Profiles</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand {
+            font-weight: bold;
+            color: #0077b5 !important;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .profile-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+            border-left: 4px solid #0077b5;
+        }
+        .profile-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
+        }
+        .btn-linkedin {
+            background-color: #0077b5;
+            border-color: #0077b5;
+            color: white;
+        }
+        .btn-linkedin:hover {
+            background-color: #005885;
+            border-color: #005885;
+            color: white;
+        }
+        .search-box {
+            border-radius: 50px;
+            border: 2px solid #e9ecef;
+            padding: 12px 20px;
+        }
+        .search-box:focus {
+            border-color: #0077b5;
+            box-shadow: 0 0 0 0.2rem rgba(0, 119, 181, 0.25);
+        }
+        .pagination {
+            gap: 5px;
+        }
+        .page-link {
+            border-radius: 8px;
+            border: none;
+            color: #0077b5;
+            margin: 0 2px;
+        }
+        .page-item.active .page-link {
+            background-color: #0077b5;
+            border-color: #0077b5;
+        }
+        .profile-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .stat-badge {
+            background: #f8f9fa;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            margin-right: 5px;
+        }
+        .filter-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+        }
+        .empty-state i {
+            font-size: 4rem;
+            color: #dee2e6;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-white shadow-sm">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+                <i class="fab fa-linkedin me-2"></i>LinkedIn Scraper Pro
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" href="{{ url_for('dashboard') }}">
+                            <i class="fas fa-tachometer-alt me-1"></i>Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active text-dark" href="{{ url_for('profiles') }}">
+                            <i class="fas fa-users me-1"></i>Profiles
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" href="{{ url_for('scraper') }}">
+                            <i class="fas fa-search me-1"></i>Scraper
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" href="{{ url_for('analytics') }}">
+                            <i class="fas fa-chart-bar me-1"></i>Analytics
+                        </a>
+                    </li>
+                </ul>
+                <div class="navbar-text text-dark">
+                    <small>Total Profiles: <strong>{{ global_stats.total_profiles | format_number }}</strong></small>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+
+        <!-- Page Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    <div class="card-body py-4">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <h1 class="display-6 fw-bold mb-2">
+                                    <i class="fas fa-users me-3"></i>All LinkedIn Profiles
+                                </h1>
+                                <p class="mb-0">Browse and manage your scraped LinkedIn profiles</p>
+                            </div>
+                            <div class="col-md-4 text-md-end">
+                                <button class="btn btn-light btn-lg" onclick="exportProfiles()">
+                                    <i class="fas fa-download me-2"></i>Export All
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search and Filters -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="filter-section">
+                    <div class="row align-items-center">
+                        <div class="col-md-6 mb-3 mb-md-0">
+                            <form action="{{ url_for('profiles') }}" method="get" class="d-flex">
+                                <input type="text" class="form-control search-box flex-grow-1" 
+                                       name="search" placeholder="Search by name, headline, company, or college..." 
+                                       value="{{ search_query }}">
+                                <button type="submit" class="btn btn-linkedin ms-2">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </form>
+                        </div>
+                        <!-- <div class="col-md-6 text-md-end">
+                            <button class="btn btn-outline-primary" onclick="refreshProfiles()">
+                                <i class="fas fa-sync-alt me-2"></i>Refresh
+                            </button>
+                            <button class="btn btn-outline-success" onclick="showFilters()">
+                                <i class="fas fa-filter me-2"></i>Filters
+                            </button>
+                        </div> -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profiles Grid -->
+        {% if profiles %}
+            <div class="row">
+                {% for profile in profiles %}
+                <div class="col-lg-6 mb-4">
+                    <div class="card profile-card h-100 " data-id="{{ profile._id }}">
+                        <div class="card-body">
+                            <div class="d-flex">
+                                <!-- Avatar -->
+                                <div class="profile-avatar me-3">
+                                    {{ profile.name[0] if profile.name else '?' }}
+                                </div>
+
+                                <!-- Profile Info -->
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <div>
+                                            <h5 class="mb-1">
+                                                <a href="{{ url_for('profile_detail', profile_id=profile._id) }}" 
+                                                   class="text-decoration-none text-dark">
+                                                    {{ profile.name or 'N/A' }}
+                                                </a>
+                                            </h5>
+                                            <p class="text-muted mb-2">
+                                                {{ profile.headline | truncate_text(80) or 'No headline' }}
+                                            </p>
+                                        </div>
+                                        <a href="{{ profile.url }}" target="_blank" 
+                                           class="btn btn-sm btn-outline-primary ms-2">
+                                            <i class="fab fa-linkedin"></i>
+                                        </a>
+                                    </div>
+
+                                    <!-- Quick Stats -->
+                                    <div class="mb-3">
+                                        {% if profile.experience %}
+                                            <span class="stat-badge">
+                                                <i class="fas fa-briefcase text-primary me-1"></i>
+                                                {{ profile.experience | length }} Jobs
+                                            </span>
+                                        {% endif %}
+                                        {% if profile.education %}
+                                            <span class="stat-badge">
+                                                <i class="fas fa-graduation-cap text-success me-1"></i>
+                                                {{ profile.education | length }} Schools
+                                            </span>
+                                        {% endif %}
+                                    </div>
+
+                                    <!-- Current Position -->
+                                    {% if profile.experience and profile.experience[0] %}
+                                        <div class="mb-2">
+                                            <small class="text-muted d-block">Current Position:</small>
+                                            <strong>{{ profile.experience[0].designation }}</strong>
+                                            {% if profile.experience[0].company_name %}
+                                                <span class="text-muted">at {{ profile.experience[0].company_name }}</span>
+                                            {% endif %}
+                                        </div>
+                                    {% endif %}
+
+                                    <!-- Last Updated -->
+                                    <div class="text-muted small">
+                                        <i class="fas fa-clock me-1"></i>
+                                        Last updated: {{ profile.last_updated | datetime_format }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-white border-0 pt-0">
+                            <div class="btn-group w-100" role="group">
+                                <a href="{{ url_for('profile_detail', profile_id=profile._id) }}" 
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-eye me-1"></i>View Details
+                                </a>
+                                <button class="btn btn-sm btn-outline-success" 
+                                        onclick="rescrapeProfile('{{ profile.url }}')">
+                                    <i class="fas fa-sync-alt me-1"></i>Re-scrape
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" 
+                                        onclick="deleteProfile('{{ profile._id }}', '{{ profile.name }}')">
+                                    <i class="fas fa-trash me-1"></i>Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Pagination -->
+            {% if total_pages > 1 %}
+            <div class="row mt-4">
+                <div class="col-12">
+                    <nav aria-label="Profile pagination">
+                        <ul class="pagination justify-content-center">
+                            <!-- Previous Button -->
+                            <li class="page-item {% if current_page <= 1 %}disabled{% endif %}">
+                                <a class="page-link" href="{{ url_for('profiles', page=current_page-1, search=search_query) }}">
+                                    <i class="fas fa-chevron-left"></i>
+                                </a>
+                            </li>
+
+                            <!-- Page Numbers -->
+                            {% for page_num in range(1, total_pages + 1) %}
+                                {% if page_num == 1 or page_num == total_pages or (page_num >= current_page - 2 and page_num <= current_page + 2) %}
+                                    <li class="page-item {% if page_num == current_page %}active{% endif %}">
+                                        <a class="page-link" href="{{ url_for('profiles', page=page_num, search=search_query) }}">
+                                            {{ page_num }}
+                                        </a>
+                                    </li>
+                                {% elif page_num == current_page - 3 or page_num == current_page + 3 %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link">...</span>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+
+                            <!-- Next Button -->
+                            <li class="page-item {% if current_page >= total_pages %}disabled{% endif %}">
+                                <a class="page-link" href="{{ url_for('profiles', page=current_page+1, search=search_query) }}">
+                                    <i class="fas fa-chevron-right"></i>
+                                </a>
+                            </li>
+                        </ul>
+                    </nav>
+
+                    <!-- Page Info -->
+                    <div class="text-center text-muted mt-2">
+                        <small>Page {{ current_page }} of {{ total_pages }}</small>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+        {% else %}
+            <!-- Empty State -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="empty-state">
+                                <i class="fas fa-user-slash"></i>
+                                <h3>No Profiles Found</h3>
+                                {% if search_query %}
+                                    <p class="text-muted mb-4">
+                                        No profiles match your search: "{{ search_query }}"
+                                    </p>
+                                    <a href="{{ url_for('profiles') }}" class="btn btn-primary">
+                                        <i class="fas fa-times me-2"></i>Clear Search
+                                    </a>
+                                {% else %}
+                                    <p class="text-muted mb-4">
+                                        Start scraping LinkedIn profiles to see them here
+                                    </p>
+                                    <a href="{{ url_for('scraper') }}" class="btn btn-linkedin btn-lg">
+                                        <i class="fas fa-plus me-2"></i>Add First Profile
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Export profiles
+        async function exportProfiles() {
+            try {
+                const response = await fetch('/api/export', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ format: 'grouped' })
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `linkedin_profiles_${new Date().toISOString().split('T')[0]}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    showAlert('success', 'Export completed successfully!');
+                } else {
+                    const error = await response.json();
+                    showAlert('danger', 'Export failed: ' + (error.error || 'Unknown error'));
+                }
+            } catch (error) {
+                showAlert('danger', 'Export failed: ' + error.message);
+            }
+        }
+
+        // Refresh profiles
+        function refreshProfiles() {
+            window.location.reload();
+        }
+
+        // Show filters (placeholder)
+        function showFilters() {
+            showAlert('info', 'Advanced filters coming soon!');
+        }
+
+        // Re-scrape profile
+        async function rescrapeProfile(url) {
+            if (!confirm('Re-scrape this profile? This will update the existing data.')) {
+                return;
+            }
+
+            try {
+                showAlert('info', 'Re-scraping profile...');
+                
+                const response = await fetch('/api/scrape', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ url: url })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert('success', 'Profile re-scraped successfully! Refreshing...');
+                    setTimeout(() => window.location.reload(), 2000);
+                } else {
+                    showAlert('danger', 'Re-scraping failed: ' + result.error);
+                }
+            } catch (error) {
+                showAlert('danger', 'Error re-scraping profile: ' + error.message);
+            }
+        }
+
+        // Delete profile (placeholder - needs backend implementation)
+        async function deleteProfile(profileId, profileName) {
+            if (!confirm(`Delete profile of ${profileName}? This cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/delete-profile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ profile_id: profileId })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('success', `${profileName}'s profile deleted successfully!`);
+
+                    // Remove card without reload (smooth)
+                    const card = document.querySelector(`[data-id="${profileId}"]`);
+                    if (card) card.remove();
+
+                    // If reload needed:
+                    // setTimeout(() => window.location.reload(), 1000);
+                } 
+                else {
+                    showAlert('danger', 'Delete failed: ' + (result.error || 'Unknown error'));
+                }
+
+            } catch (error) {
+                showAlert('danger', 'Error deleting profile: ' + error.message);
+            }
+        }
+
+        // Show alert messages
+        function showAlert(type, message) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            const container = document.querySelector('.container');
+            container.insertBefore(alertDiv, container.firstChild);
+            
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+    </script>
+
+</body>
+</html>

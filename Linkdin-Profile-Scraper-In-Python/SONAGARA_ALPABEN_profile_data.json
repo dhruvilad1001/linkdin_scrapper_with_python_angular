@@ -1,0 +1,58 @@
+{
+    "name": "SONAGARA ALPABEN",
+    "url": "https://www.linkedin.com/in/sonagara-alpaben2411/",
+    "headline": "Web Developer | PHP | Python | Laravel Enthusiast | \ud83c\udf96\ufe0f NCC 'C' Certificate Holder (A Grade) | \ud83c\udfc5 Passionate About Sports and Leadership Through Athletics",
+    "about": null,
+    "education": [
+        {
+            "college": "Anand Agricultural University, Anand",
+            "degree": "Bachelor of Technology - BTech, Computer Science",
+            "duration": "Nov 2022 - Jul 2026"
+        },
+        {
+            "college": "G M Patel Girls\u2019 School",
+            "degree": "HSC",
+            "duration": "2022"
+        },
+        {
+            "college": "Shree Samarpan Science School, Bankodi",
+            "degree": "SSC",
+            "duration": "2020"
+        }
+    ],
+    "licenses": [
+        {
+            "name": "LARAVEL Framework for Beginner",
+            "institute": "Alison #Empower Yourself",
+            "issued_date": "Issued Aug 2025"
+        },
+        {
+            "name": "SQL(Basic)",
+            "institute": "HackerRank",
+            "issued_date": "Issued Jul 2025"
+        },
+        {
+            "name": "Application of AI/ML Model for Specific Crop Acreage Mapping",
+            "institute": "Indian Institute of Remote Sensing (IIRS), Indian Space Research Organization (ISRO)",
+            "issued_date": "Issued Apr 2025"
+        },
+        {
+            "name": "Generative AI in Practice",
+            "institute": "Sololearn",
+            "issued_date": "Issued Apr 2025"
+        },
+        {
+            "name": "Geodata Processing using Python and Machine Learning",
+            "institute": "Indian Institute of Remote Sensing (IIRS), Indian Space Research Organization (ISRO)",
+            "issued_date": "Issued Mar 2025"
+        },
+        {
+            "name": "PHP for Beginners",
+            "institute": "Alison #Empower Yourself",
+            "issued_date": "php_certificate_alpa.png"
+        }
+    ],
+    "projects": [],
+    "courses": [],
+    "honors_awards": []
+}

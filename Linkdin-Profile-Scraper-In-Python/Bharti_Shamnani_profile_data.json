@@ -1,0 +1,75 @@
+{
+    "name": "Bharti Shamnani",
+    "url": "https://www.linkedin.com/in/bhartishamnani/",
+    "headline": "HR Recruitment || Data Science Information || AI & ML Analytics",
+    "about": "I am a versatile professional with experience in HR recruitment and a strong academic foundation in Data Science and Artificial Intelligence (AI). My background allows me to bridge the gap between people and technology, combining analytical expertise with human resource skills.In HR recruitment, I have developed the ability to identify and hire the right talent, manage candidate pipelines, and build strong professional relationships.In Data Science, I am skilled in data analysis, machine learning, and statistical modeling to derive insights and support decision-making.With a focus on Artificial Intelligence, I explore intelligent systems, automation, and advanced algorithms to solve real-world problems.I am passionate about leveraging data-driven strategies not only in business decision-making but also in talent management and workforce optimization. With this combined skill set, I aim to contribute to innovative projects that integrate technology and human potential.I am a versatile professional with experience in HR recruitment and a strong academic foundation in Data Science and Artificial Intelligence (AI). My background allows me to bridge the gap between people and technology, combining analytical expertise with human resource skills.\n\nIn HR recruitment, I have developed the ability to identify and hire the right talent, manage candidate pipelines, and build strong professional relationships.\n\nIn Data Science, I am skilled in data analysis, machine learning, and statistical modeling to derive insights and support decision-making.\n\nWith a focus on Artificial Intelligence, I explore intelligent systems, automation, and advanced algorithms to solve real-world problems.\n\nI am passionate about leveraging data-driven strategies not only in business decision-making but also in talent management and workforce optimization. With this combined skill set, I aim to contribute to innovative projects that integrate technology and human potential.",
+    "experience": [
+        {
+            "company_name": "WorkFromHomeOpportunity: HR",
+            "designation": "Human Resources Specialist",
+            "duration": "Jun 2024 to Present \u00b7 1 yr 5 mos",
+            "location": "Remote"
+        },
+        {
+            "company_name": "LinkedIn",
+            "designation": "Brand Specialist",
+            "duration": "Jun 2024 to Present \u00b7 1 yr 5 mos",
+            "location": "Remote"
+        }
+    ],
+    "education": [
+        {
+            "college": "Asmita Foundations Sau Sumantai Patil B.Ed. College, Maharashtra",
+            "degree": "Bachelor in computer applications(BCA), programming language, python"
+        }
+    ],
+    "licenses": [
+        {
+            "name": "Tata Group - Data Visualisation: Empowering Business with Effective Insights Job Simulation",
+            "institute": "Forage",
+            "issued_date": "Issued Dec 2024"
+        },
+        {
+            "name": "Course Completion Certificate",
+            "institute": "DevTown",
+            "issued_date": "Issued Oct 2024"
+        },
+        {
+            "name": "Data Science Training Completion Certificate",
+            "institute": "DevTown",
+            "issued_date": "Issued Oct 2024"
+        },
+        {
+            "name": "Internship Completion Certificate",
+            "institute": "DevTown",
+            "issued_date": "Issued Oct 2024"
+        },
+        {
+            "name": "Letter of Recommendation",
+            "institute": "DevTown",
+            "issued_date": "Issued Oct 2024"
+        }
+    ],
+    "projects": [
+        {
+            "project_name": "ANN (Artifical  Neural Network) on Handwritten digit detection",
+            "duration": "GitHub - bhartishamnani/ANN-of-Handwritten-Digit-Detection"
+        },
+        {
+            "project_name": "Face-Detection-Recognition",
+            "duration": "Associated with WorkFromHomeOpportunity: HR",
+            "description": "GitHub - bhartishamnani/Face-Detection-Recognition"
+        }
+    ],
+    "courses": [
+        {
+            "course_name": "Tata Group - Data Visualisation: Empowering Business with Effective Insights Job Simulation",
+            "associated_with": "Forage"
+        },
+        {
+            "course_name": "Course Completion Certificate",
+            "associated_with": "DevTown"
+        }
+    ],
+    "honors_awards": []
+}

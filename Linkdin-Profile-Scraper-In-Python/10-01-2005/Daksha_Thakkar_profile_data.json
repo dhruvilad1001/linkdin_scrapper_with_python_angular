@@ -1,0 +1,111 @@
+{
+    "name": "Daksha Thakkar",
+    "url": "https://www.linkedin.com/in/daksha-thakkar-79a98577/",
+    "headline": "HR Manager at Zealous System (Great place to work Certified)",
+    "about": null,
+    "experience": [
+        {
+            "company_name": "Zealous System",
+            "designation": "HR Manager",
+            "duration": "Jul 2021 to Present \u00b7 4 yrs 3 mos",
+            "location": "Ahmedabad, Gujarat, India"
+        },
+        {
+            "company_name": "Credencys Solutions Inc",
+            "designation": "Human Resource",
+            "duration": "Jun 2019 to Jun 2020 \u00b7 1 yr 1 mo",
+            "location": "Ahmedabad Area, India"
+        },
+        {
+            "company_name": "Codal Inc.",
+            "designation": "HR Executive",
+            "duration": "Aug 2017 to Jan 2018 \u00b7 6 mos",
+            "location": "Ahmedabad Area, India"
+        },
+        {
+            "company_name": "Ethos HR",
+            "designation": "Sr. Recruiter",
+            "duration": "Apr 2016 to Aug 2017 \u00b7 1 yr 5 mos",
+            "location": "Ahmedabad Area, India"
+        }
+    ],
+    "education": [
+        {
+            "college": "Geetanjali institute of technical studies",
+            "degree": "Master\u2019s Degree, Computers",
+            "duration": "2009 - 2012",
+            "grade": "Grade: Honours"
+        },
+        {
+            "college": "International college for girls, Jaipur",
+            "degree": "Bachelor\u2019s Degree, Computers",
+            "duration": "2006 - 2009"
+        },
+        {
+            "college": "Central Academy,Chittorgarh",
+            "degree": "High School",
+            "duration": "2005 - 2006"
+        }
+    ],
+    "licenses": [
+        {
+            "name": "Diploma in software testing",
+            "institute": "Issued Apr 2015"
+        },
+        {
+            "name": "Rational Application Development",
+            "institute": "Issued Apr 2011"
+        }
+    ],
+    "projects": [],
+    "courses": [
+        {
+            "course_name": "RAD",
+            "associated_with": "Associated with Geetanjali institute of technical studies"
+        },
+        {
+            "course_name": "RFT",
+            "associated_with": "Associated with Geetanjali institute of technical studies"
+        }
+    ],
+    "honors_awards": [
+        {
+            "award_name": "Jeff Weiner",
+            "issued_by": "Executive Chairman at LinkedIn / Founding Partner Next Play Ventures",
+            "associated_with": "10,400,275 followers"
+        },
+        {
+            "award_name": "Randi Zuckerberg",
+            "issued_by": "11x Marathons since Sept 2023 \u2728 7x Ultramarathons (Longest: 100 miles) \u2728 3 Tony Awards \u2728 Host on SiriusXM \u2728 Mom x 3 \u2728 Author x 3 \u2728 Bad Golfer \u2728",
+            "associated_with": "1,209,292 followers"
+        },
+        {
+            "award_name": "IBM",
+            "issued_by": "18,678,879 followers"
+        },
+        {
+            "award_name": "Accenture",
+            "issued_by": "13,810,075 followers"
+        },
+        {
+            "award_name": "wordpress developer expert",
+            "issued_by": "185 members",
+            "associated_with": "Join wordpress developer expert group"
+        },
+        {
+            "award_name": "WordPress Plugin Developers Group",
+            "issued_by": "141 members",
+            "associated_with": "Join WordPress Plugin Developers Group group"
+        },
+        {
+            "award_name": "Latest Digital Marketing News",
+            "issued_by": "Trending Digital Marketing Industry Update, News and Tips.",
+            "associated_with": "Published weekly"
+        },
+        {
+            "award_name": "Guidance Talent",
+            "issued_by": "Recruitment Trainer | Career Coach | Entreprenur",
+            "associated_with": "Published weekly"
+        }
+    ]
+}

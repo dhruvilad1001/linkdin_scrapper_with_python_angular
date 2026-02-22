@@ -1,0 +1,122 @@
+{
+    "name": "Mukund Savaliya",
+    "url": "https://www.linkedin.com/in/savaliya-mukund27/",
+    "headline": "Software Engineer @Vantiva | M.Tech CSE-DS, ITNU'25 | Former Researcher @ISRO | Former General Secretary-AIT, AAU (Member of SRC) | Gold Medalist B.Tech | Hobby - To Code",
+    "about": null,
+    "experience": [
+        {
+            "company_name": "Vantiva",
+            "duration": "1 yr 3 mos",
+            "designations": [
+                {
+                    "designation": "Software Engineer",
+                    "role": "Full-time",
+                    "duration": "Jun 2025 to Present \u00b7 3 mos",
+                    "location": "Chennai, Tamil Nadu, India",
+                    "projects": ""
+                },
+                {
+                    "designation": "Software Intern",
+                    "role": "Internship",
+                    "duration": "Jun 2024 to Jun 2025 \u00b7 1 yr 1 mo",
+                    "location": "Chennai, Tamil Nadu, India",
+                    "projects": ""
+                }
+            ]
+        },
+        {
+            "company_name": "Teaching Assistant",
+            "duration": "Nirma University, Ahmedabad, Gujarat, India",
+            "designations": [
+                {
+                    "designation": "Teaching Assistant",
+                    "duration": "Aug 2023 to May 2024 \u00b7 10 mos",
+                    "location": "Ahmedabad, Gujarat, India \u00b7 On-site",
+                    "projects": ""
+                }
+            ]
+        },
+        {
+            "company_name": "Research Intern",
+            "duration": "ISRO - Indian Space Research Organization \u00b7 Internship",
+            "designations": [
+                {
+                    "designation": "Research Intern",
+                    "duration": "Jan 2023 to Apr 2023 \u00b7 4 mos",
+                    "location": "Ahmedabad, Gujarat, India \u00b7 On-site",
+                    "projects": ""
+                }
+            ]
+        }
+    ],
+    "education": [
+        {
+            "college": "Nirma University",
+            "degree": "Master of Technology - MTech, Computer Science and Engineering (Data Science)",
+            "duration": "Jul 2023 - May 2025",
+            "grade": "Grade: 9.05"
+        },
+        {
+            "college": "College of Agricultural Information Technology , Anand",
+            "degree": "Bachelor of Technology - BTech, Agricultural Infromation Technology",
+            "duration": "Aug 2019 - May 2023",
+            "grade": "Grade: 8.33"
+        }
+    ],
+    "licenses": [
+        {
+            "name": "Google Cloud Community",
+            "institute": "Google",
+            "issued_date": "Issued Jul 2025"
+        },
+        {
+            "name": "Introduction to Generative AI",
+            "institute": "Google",
+            "issued_date": "Issued Mar 2025"
+        },
+        {
+            "name": "Data Analytics using Python",
+            "institute": "NAHEP-CAAST, AAU, ANAND",
+            "issued_date": "Issued Jun 2023"
+        },
+        {
+            "name": "Geodata Processing using Python",
+            "institute": "Indian Institute of Remote Sensing (IIRS), Indian Space Research Organization (ISRO)",
+            "issued_date": "Issued Mar 2023"
+        },
+        {
+            "name": "Artificial Intelligence (AI) for Earth Observation (EO) and Geodata Handling and Processing",
+            "institute": "Indian Institute of Remote Sensing (IIRS), Indian Space Research Organization (ISRO)",
+            "issued_date": "Issued May 2022"
+        }
+    ],
+    "projects": [
+        {
+            "project_name": "LLM models for Pharmacovigilance in Oncology",
+            "duration": "Jun 2024 - Present",
+            "description": "Associated with Nirma University, Ahmedabad, Gujarat, India",
+            "skills": "Skills: Large Language Models (LLM)"
+        },
+        {
+            "project_name": "Automation of Remote Sensing-based Semi-Physical Model for Crop Yield Estimation in GEE",
+            "duration": "Jan 2023 - Apr 2023",
+            "description": "Associated with ISRO - Indian Space Research Organization",
+            "skills": "\u2022 Led the development and execution of a Remote Sensing based Semi-Physical Model for Crop Yield Estimation in Google Earth Engine.\n\u2022 Generated precise planting dates at the pixel level and calculated key input parameters (PAR, fAPAR, Temperature Scalar, Water Scalar) for the model.\n\u2022 Successfully estimated Biomass and Yield."
+        },
+        {
+            "project_name": "Information Management System for Pesticide Residue Laboratory",
+            "duration": "Jul 2022 - Dec 2022",
+            "description": "Associated with College of Agricultural Information Technology , Anand",
+            "skills": "Skills: Project Management \u00b7 Node.js \u00b7 MongoDB \u00b7 Software Project Management \u00b7 JavaScript \u00b7 React.js \u00b7 Teamwork"
+        }
+    ],
+    "courses": [],
+    "honors_awards": [
+        {
+            "award_name": "Gold Medal (Data Analysis with MATLAB)",
+            "issued_by": "Anand Agricultural University",
+            "issued_date": "Feb 2023",
+            "associated_with": "College of Agricultural Information Technology , Anand"
+        }
+    ]
+}

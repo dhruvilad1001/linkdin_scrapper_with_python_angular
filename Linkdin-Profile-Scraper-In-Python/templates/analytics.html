@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics - LinkedIn Scraper Pro</title>
+
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+
+    <style>
+        body { background: #f8f9fa; }
+        .navbar-brand { font-weight: bold; color: #0077b5 !important; }
+        .gradient-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 15px; }
+        .stat-card { padding: 20px; border-radius: 12px; background: #ffffff; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .stat-number { font-size: 32px; font-weight: bold; color: #764ba2; }
+        canvas { background: #fff; border-radius: 15px; padding: 15px; }
+    </style>
+</head>
+
+<body>
+
+<!-- NAVBAR (NO ACTIVE HIGHLIGHT) -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-white shadow-sm">
+    <div class="container">
+
+        <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+            <i class="fab fa-linkedin me-2"></i>LinkedIn Scraper Pro
+        </a>
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarNav">
+
+            <ul class="navbar-nav me-auto">
+
+                <li class="nav-item">
+                    <a class="nav-link text-dark" href="{{ url_for('dashboard') }}">
+                        <i class="fas fa-tachometer-alt me-1"></i>Dashboard
+                    </a>
+                </li>
+
+                <li class="nav-item">
+                    <a class="nav-link text-dark" href="{{ url_for('profiles') }}">
+                        <i class="fas fa-users me-1"></i>Profiles
+                    </a>
+                </li>
+
+                <li class="nav-item">
+                    <a class="nav-link text-dark" href="{{ url_for('scraper') }}">
+                        <i class="fas fa-search me-1"></i>Scraper
+                    </a>
+                </li>
+
+                <!-- ⭐ No active / no highlight here -->
+                <li class="nav-item">
+                    <a class="nav-link text-dark" href="{{ url_for('analytics') }}">
+                        <i class="fas fa-chart-bar me-1"></i>Analytics
+                    </a>
+                </li>
+
+            </ul>
+
+            <div class="navbar-text text-dark">
+                <small>Total Profiles:
+                    <strong>{{ global_stats.total_profiles | format_number }}</strong>
+                </small>
+            </div>
+
+        </div>
+    </div>
+</nav>
+<!-- END NAVBAR -->
+
+
+<div class="container mt-4">
+
+    <div class="gradient-header p-5 mb-4 text-center">
+        <h1 class="display-5 fw-bold"><i class="fas fa-chart-line me-2"></i>Advanced Analytics Dashboard</h1>
+        <p>Visual breakdown of all scraped LinkedIn profiles</p>
+    </div>
+
+    <!-- STATS -->
+    <div class="row" id="statsCards"></div>
+
+    <!-- CHARTS -->
+    <div class="row mt-4">
+
+        <div class="col-md-6 mb-4">
+            <h5 class="text-center fw-bold mb-2">Experience Distribution</h5>
+            <canvas id="experienceChart"></canvas>
+        </div>
+
+        <div class="col-md-6 mb-4">
+            <h5 class="text-center fw-bold mb-2">Daily Scraping Activity (Last 30 Days)</h5>
+            <canvas id="dailyChart"></canvas>
+        </div>
+
+        <div class="col-md-6 mb-4">
+            <h5 class="text-center fw-bold mb-2">Top Certifications</h5>
+            <canvas id="certificationsChart"></canvas>
+        </div>
+
+        <div class="col-md-6 mb-4">
+            <h5 class="text-center fw-bold mb-2">Top Awards</h5>
+            <canvas id="awardsChart"></canvas>
+        </div>
+
+    </div>
+</div>
+
+<script>
+async function loadAnalytics() {
+    const response = await fetch("/api/advanced-analytics");
+    const data = await response.json();
+
+    if (!data.success) return;
+
+    const a = data.analytics;
+
+    // STATS
+    document.getElementById("statsCards").innerHTML = `
+        <div class="col-md-4 mb-3">
+            <div class="stat-card">
+                <h6>Total Profiles</h6>
+                <div class="stat-number">${a.total_profiles}</div>
+            </div>
+        </div>
+
+        <div class="col-md-4 mb-3">
+            <div class="stat-card">
+                <h6>Unique Companies</h6>
+                <div class="stat-number">${a.unique_companies}</div>
+            </div>
+        </div>
+
+        <div class="col-md-4 mb-3">
+            <div class="stat-card">
+                <h6>Unique Schools</h6>
+                <div class="stat-number">${a.unique_schools}</div>
+            </div>
+        </div>
+    `;
+
+    // EXPERIENCE DISTRIBUTION
+    new Chart(document.getElementById("experienceChart"), {
+        type: "bar",
+        data: {
+            labels: a.experience_distribution.map(e => e.range),
+            datasets: [{
+                label: "Profiles",
+                data: a.experience_distribution.map(e => e.count),
+                backgroundColor: "#667eea"
+            }]
+        }
+    });
+
+    // DAILY ACTIVITY
+    new Chart(document.getElementById("dailyChart"), {
+        type: "line",
+        data: {
+            labels: a.daily_activity.map(d => d.date),
+            datasets: [{
+                label: "Profiles Scraped",
+                data: a.daily_activity.map(d => d.count),
+                borderColor: "#667eea",
+                borderWidth: 3
+            }]
+        }
+    });
+
+    // CERTIFICATIONS
+    new Chart(document.getElementById("certificationsChart"), {
+        type: "bar",
+        data: {
+            labels: a.top_certifications.map(c => c.name),
+            datasets: [{
+                label: "Count",
+                data: a.top_certifications.map(c => c.count),
+                backgroundColor: "#9f7aea"
+            }]
+        }
+    });
+
+    // AWARDS
+    new Chart(document.getElementById("awardsChart"), {
+        type: "bar",
+        data: {
+            labels: a.top_awards.map(a => a.name),
+            datasets: [{
+                label: "Count",
+                data: a.top_awards.map(a => a.count),
+                backgroundColor: "#764ba2"
+            }]
+        }
+    });
+}
+
+loadAnalytics();
+</script>
+
+</body>
+</html>
