@@ -24,7 +24,7 @@ class LinkedInScraper:
     def setup_driver(self):
         """Setup Chrome driver with anti-detection options"""
         chrome_options = Options()
-        chrome_options.add_argument("--headless=new")
+        # chrome_options.add_argument("--headless=new")  # DISABLED FOR DEBUGGING
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
@@ -386,241 +386,95 @@ class LinkedInScraper:
             logger.warning(f"❌ Error in education section: {e}")
             return []
     
-    def scrape_projects(self, driver):
-        """Scrape projects section using specific XPath"""
+    def scrape_projects(self, driver, profile_url):
+        """Scrape projects by navigating to the dedicated projects page"""
         try:
-            # Scroll more aggressively to load projects section
-            logger.info("📜 Scrolling to load projects section...")
-            for i in range(5):
-                scroll_position = 0.5 + (i * 0.1)  # 0.5, 0.6, 0.7, 0.8, 0.9
-                driver.execute_script(f"window.scrollTo(0, document.body.scrollHeight * {scroll_position});")
-                sleep(2)
-            
-            # Scroll back up a bit
-            driver.execute_script("window.scrollTo(0, document.body.scrollHeight * 0.6);")
+            # Navigate directly to the projects detail page
+            projects_url = profile_url.rstrip('/') + '/details/projects/'
+            logger.info(f"🚀 Navigating to projects page: {projects_url}")
+            driver.get(projects_url)
             sleep(3)
             
             projects_list = []
             
-            # Try to find projects section using the specific XPath pattern
             try:
-                # First, try to find the Projects heading to confirm the section exists
-                projects_heading = None
-                try:
-                    # Try multiple variations
-                    projects_heading = driver.find_element(By.XPATH, "//h2[contains(., 'Projects')]")
-                    logger.info("✅ Found Projects heading (variation 1)")
-                except:
-                    try:
-                        projects_heading = driver.find_element(By.XPATH, "//span[text()='Projects']")
-                        logger.info("✅ Found Projects heading (variation 2)")
-                    except:
-                        try:
-                            projects_heading = driver.find_element(By.XPATH, "//*[contains(text(), 'Projects')]")
-                            logger.info("✅ Found Projects heading (variation 3)")
-                        except:
-                            logger.warning("⚠️ Projects heading not found with any variation")
-                            return []
-                
-                # Get the section element (parent of the heading)
-                projects_section = projects_heading.find_element(By.XPATH, "./ancestor::section")
-                logger.info("✅ Found projects section")
-                
-                # Get the HTML of the section
-                projects_html = projects_section.get_attribute("outerHTML")
-                projects_soup = BeautifulSoup(projects_html, "html.parser")
+                # Find all project items on the dedicated page
+                page_source = driver.page_source
+                soup = BeautifulSoup(page_source, "html.parser")
                 
                 # Find all project list items
-                project_items = projects_soup.find_all("li", class_=lambda x: x and "artdeco-list__item" in x)
-                logger.info(f"🔍 Found {len(project_items)} project items")
+                project_items = soup.find_all("li", class_=lambda x: x and ("pvs-list__paged-list-item" in x or "artdeco-list__item" in x))
+                logger.info(f"🔍 Found {len(project_items)} project items on dedicated page")
                 
                 for idx, item in enumerate(project_items):
                     try:
-                        # Extract project name - look for span with aria-hidden="true" in a div with t-bold class
+                        # Extract project name
                         project_name = ""
-                        name_div = item.find("div", class_=lambda x: x and "t-bold" in x)
-                        if name_div:
-                            name_span = name_div.find("span", attrs={"aria-hidden": "true"})
-                            if name_span:
-                                project_name = name_span.get_text(strip=True)
-                        
-                        if not project_name or len(project_name) < 3:
-                            logger.debug(f"Skipping item {idx+1}: no valid project name")
-                            continue
-                        
-                        # Extract description - look for the collapsed text div
-                        description = ""
-                        desc_divs = item.find_all("div", class_=lambda x: x and "inline-show-more-text--is-collapsed" in x)
-                        for div in desc_divs:
-                            desc_span = div.find("span", attrs={"aria-hidden": "true"})
-                            if desc_span:
-                                text = desc_span.get_text(strip=True)
-                                # Make sure it's not a skill list
-                                if text and len(text) > 40 and not 'and +' in text:
-                                    description = text
+                        name_spans = item.find_all("span", attrs={"aria-hidden": "true"})
+                        for span in name_spans:
+                            parent = span.find_parent()
+                            if parent and "t-bold" in parent.get("class", []):
+                                text = span.get_text(strip=True)
+                                if text and len(text) > 3 and not text.startswith('Skills:'):
+                                    project_name = text
                                     break
                         
-                        # Extract skills - look for the skill link text (contains "and +X skills")
-                        skills = ""
-                        skill_links = item.find_all("strong")
-                        for strong in skill_links:
-                            text = strong.get_text(strip=True)
-                            if 'and +' in text and 'skill' in text.lower():
-                                # This is the skill summary, extract it
-                                skills = text
-                                break
+                        if not project_name:
+                            continue
                         
-                        # Extract "Associated with" information
-                        associated_with = ""
-                        assoc_spans = item.find_all("span", attrs={"aria-hidden": "true"})
-                        for span in assoc_spans:
+                        # Extract description
+                        description = ""
+                        desc_spans = item.find_all("span", attrs={"aria-hidden": "true"})
+                        for span in desc_spans:
                             text = span.get_text(strip=True)
-                            if text.startswith('Associated with'):
-                                associated_with = text.replace('Associated with', '').strip()
+                            if (text and text != project_name and 
+                                not text.startswith('Skills:') and 
+                                not text.startswith('Associated with') and
+                                len(text) > 40 and len(text) < 600):
+                                description = text
                                 break
                         
-                        # Only add if we have a valid project name
+                        # Extract skills
+                        skills = ""
+                        for span in desc_spans:
+                            text = span.get_text(strip=True)
+                            if 'Skills:' in text:
+                                skills = text.split('Skills:')[1].strip() if 'Skills:' in text else text
+                                break
+                        
+                        # Only add if valid
                         if project_name and len(project_name) > 3:
-                            project_dict = {
-                                'project_name': project_name,
-                                'description': description if description else None,
-                                'skills': skills if skills else None,
-                                'duration': None,
-                                'associated_with': associated_with if associated_with else None
-                            }
-                            projects_list.append(project_dict)
-                            logger.info(f"✅ Parsed project #{len(projects_list)}: {project_name}")
+                            if not any(p['project_name'] == project_name for p in projects_list):
+                                project_dict = {
+                                    'project_name': project_name,
+                                    'description': description if description else None,
+                                    'skills': skills if skills else None,
+                                    'duration': None
+                                }
+                                projects_list.append(project_dict)
+                                logger.info(f"✅ Parsed project #{len(projects_list)}: {project_name}")
                     
                     except Exception as e:
                         logger.debug(f"Error processing project item #{idx+1}: {e}")
                         continue
                 
-                # If we found projects, check if there are more
                 if projects_list:
-                    logger.info(f"🚀 Found {len(projects_list)} projects in collapsed view")
-                    
-                    # Try to click "Show all" to get remaining projects
-                    try:
-                        show_all_link = projects_soup.find("a", string=lambda x: x and "Show all" in x and "project" in x)
-                        if show_all_link:
-                            # Extract the number from "Show all X projects"
-                            text = show_all_link.get_text(strip=True)
-                            import re
-                            match = re.search(r'Show all (\d+) project', text)
-                            if match:
-                                total_projects = int(match.group(1))
-                                logger.info(f"📊 Profile has {total_projects} total projects, found {len(projects_list)} in collapsed view")
-                                
-                                # If there are more projects, try to click and get them
-                                if total_projects > len(projects_list):
-                                    try:
-                                        show_all_buttons = driver.find_elements(By.XPATH, "//a[contains(text(), 'Show all') and contains(text(), 'project')]")
-                                        if show_all_buttons:
-                                            button = show_all_buttons[0]
-                                            driver.execute_script("arguments[0].scrollIntoView(true);", button)
-                                            sleep(1)
-                                            button.click()
-                                            sleep(3)
-                                            logger.info("✅ Clicked 'Show all projects' link")
-                                            
-                                            # Re-parse the expanded view
-                                            expanded_projects = self._parse_expanded_projects(driver)
-                                            if expanded_projects and len(expanded_projects) > len(projects_list):
-                                                logger.info(f"🚀 Found {len(expanded_projects)} projects in expanded view")
-                                                return expanded_projects
-                                    except Exception as e:
-                                        logger.debug(f"Could not expand projects: {e}")
-                    except Exception as e:
-                        logger.debug(f"Could not check for Show all link: {e}")
-                    
+                    logger.info(f"🚀 Found {len(projects_list)} projects total")
                     return projects_list
                 else:
-                    logger.warning("⚠️ No projects found in collapsed view")
+                    logger.warning("⚠️ No projects found on dedicated page")
                     
             except Exception as e:
-                logger.error(f"❌ Project extraction failed: {e}")
+                logger.error(f"❌ Projects extraction failed: {e}")
                 import traceback
                 logger.error(traceback.format_exc())
             
-            logger.info("🚀 No projects section found")
             return []
             
         except Exception as e:
             logger.warning(f"❌ Error in projects section: {e}")
             import traceback
             logger.warning(traceback.format_exc())
-            return []
-    
-    def _parse_expanded_projects(self, driver):
-        """Parse projects from the expanded 'Show all' view"""
-        try:
-            sleep(2)  # Wait for page to load
-            page_source = driver.page_source
-            soup = BeautifulSoup(page_source, "html.parser")
-            
-            projects_list = []
-            
-            # Find all project items in expanded view
-            project_items = soup.find_all("li", class_=lambda x: x and "pvs-list__paged-list-item" in x)
-            
-            logger.info(f"🔍 Found {len(project_items)} project items in expanded view")
-            
-            for idx, item in enumerate(project_items):
-                try:
-                    # Extract project name
-                    project_name = ""
-                    name_spans = item.find_all("span", attrs={"aria-hidden": "true"})
-                    for span in name_spans:
-                        parent = span.find_parent()
-                        if parent and "t-bold" in parent.get("class", []):
-                            text = span.get_text(strip=True)
-                            if text and len(text) > 3 and not 'Skills:' in text:
-                                project_name = text
-                                break
-                    
-                    if not project_name:
-                        continue
-                    
-                    # Extract description
-                    description = ""
-                    desc_spans = item.find_all("span", attrs={"aria-hidden": "true"})
-                    for span in desc_spans:
-                        text = span.get_text(strip=True)
-                        if (text and text != project_name and 
-                            not text.startswith('Skills:') and 
-                            not text.startswith('Associated with') and
-                            len(text) > 40 and len(text) < 600):
-                            description = text
-                            break
-                    
-                    # Extract skills
-                    skills = ""
-                    for span in desc_spans:
-                        text = span.get_text(strip=True)
-                        if 'Skills:' in text:
-                            skills = text.split('Skills:')[1].strip() if 'Skills:' in text else text
-                            break
-                    
-                    # Only add if valid
-                    if project_name and len(project_name) > 3:
-                        if not any(p['project_name'] == project_name for p in projects_list):
-                            project_dict = {
-                                'project_name': project_name,
-                                'description': description if description else None,
-                                'skills': skills if skills else None,
-                                'duration': None
-                            }
-                            projects_list.append(project_dict)
-                            logger.info(f"✅ Parsed expanded project #{len(projects_list)}: {project_name}")
-                
-                except Exception as e:
-                    logger.debug(f"Error processing expanded project #{idx+1}: {e}")
-                    continue
-            
-            return projects_list
-            
-        except Exception as e:
-            logger.debug(f"Error parsing expanded projects: {e}")
             return []
     
     def scrape_licenses(self, driver):
@@ -721,128 +575,77 @@ class LinkedInScraper:
             logger.warning(f"❌ Error in licenses section: {e}")
             return []
     
-    def scrape_skills(self, driver):
-        """Scrape skills section with new LinkedIn structure"""
+    def scrape_skills(self, driver, profile_url):
+        """Scrape skills by navigating to the dedicated skills page"""
         try:
-            # Scroll to skills section
-            driver.execute_script("window.scrollTo(0, document.body.scrollHeight * 0.9);")
-            sleep(3)
+            # Navigate directly to the skills detail page
+            skills_url = profile_url.rstrip('/') + '/details/skills/'
+            logger.info(f"🛠️ Navigating to skills page: {skills_url}")
+            driver.get(skills_url)
+            sleep(4)
             
             skills_list = []
             
-            # Try to find and click "Show all X skills" button
             try:
-                # Look for the specific "Show all X skills" button
-                show_all_buttons = driver.find_elements(By.XPATH, "//button[contains(text(), 'Show all') and contains(text(), 'skills')]")
-                if show_all_buttons:
-                    button = show_all_buttons[0]
-                    driver.execute_script("arguments[0].scrollIntoView(true);", button)
-                    sleep(1)
-                    button.click()
-                    sleep(3)
-                    logger.info("✅ Clicked 'Show all skills' button")
-                else:
-                    # Try alternative selectors
-                    show_all_buttons = driver.find_elements(By.XPATH, "//a[contains(text(), 'Show all') and contains(text(), 'skills')]")
-                    if show_all_buttons:
-                        button = show_all_buttons[0]
-                        driver.execute_script("arguments[0].scrollIntoView(true);", button)
-                        sleep(1)
-                        button.click()
-                        sleep(3)
-                        logger.info("✅ Clicked 'Show all skills' link")
-            except Exception as e:
-                logger.debug(f"Could not click show all skills button: {e}")
-            
-            # Method 1: Extract skills from the expanded view
-            try:
-                # After clicking, get the page source
+                # Get page source
                 page_source = driver.page_source
                 soup = BeautifulSoup(page_source, "html.parser")
                 
-                # Look for skills in various containers
-                skill_selectors = [
-                    # Skills in list items
-                    "section[data-section='skills'] li",
-                    "div[data-view-name*='skill'] span",
-                    # Skills in skill cards
-                    ".skill-category-entity span",
-                    ".pv-skill-category-entity span",
-                    # Generic skill containers
-                    "[data-testid*='skill'] span",
-                    "div.skill-item span",
-                    # Skills in text format
-                    ".pv-skill-category-entity__name span",
-                    ".skill-category-entity__name span"
-                ]
+                # Method 1: Look for spans with aria-hidden="true" inside hoverable-link-text divs
+                # This is the most accurate method based on the HTML structure
+                hoverable_divs = soup.find_all("div", class_=lambda x: x and "hoverable-link-text" in x)
+                logger.info(f"🔍 Found {len(hoverable_divs)} hoverable-link-text divs")
                 
-                for selector in skill_selectors:
-                    skill_elements = soup.select(selector)
-                    for element in skill_elements:
-                        skill_text = element.get_text(strip=True)
-                        if skill_text and 2 <= len(skill_text) <= 50:  # Valid skill length
-                            # Filter out common non-skill text
-                            if not any(word in skill_text.lower() for word in ['show', 'all', 'skills', 'endorsed', 'connections', 'profile', 'view', 'more', 'see', 'less']):
-                                if skill_text not in skills_list:  # Avoid duplicates
-                                    skills_list.append(skill_text)
+                for div in hoverable_divs:
+                    span = div.find("span", attrs={"aria-hidden": "true"})
+                    if span:
+                        skill_text = span.get_text(strip=True)
+                        # Filter out noise and duplicates
+                        if (skill_text and 
+                            len(skill_text) >= 2 and 
+                            len(skill_text) <= 100 and
+                            skill_text.lower() not in ['skills', 'show all', 'view', 'more', 'back'] and
+                            skill_text not in skills_list):
+                            skills_list.append(skill_text)
+                            logger.info(f"✅ Found skill: {skill_text}")
+                
+                # Method 2: Fallback to <p> tags if Method 1 didn't find anything
+                if not skills_list:
+                    logger.info("🔄 Fallback: Trying <p> tag extraction...")
+                    all_p_tags = soup.find_all("p")
+                    
+                    # Known tech skills to look for
+                    known_skills = [
+                        'MongoDB', 'REST APIs', 'React.js', 'chromadb', 'OpenCV',
+                        'yolo', 'Flask', 'AIML', 'PHP', 'boostrap', 'sqlserver',
+                        'Web Development', 'Teamwork', 'MERN Stack', 'SQL',
+                        '.NET core MVC', 'Data Structures', 'Python', 'Java'
+                    ]
+                    
+                    for p in all_p_tags:
+                        text = p.get_text(strip=True)
+                        # Only match exact skill names (not partial matches in longer text)
+                        if text in known_skills and text not in skills_list:
+                            skills_list.append(text)
+                            logger.info(f"✅ Matched skill: {text}")
                 
                 if skills_list:
-                    # Remove duplicates while preserving order
-                    skills_list = list(dict.fromkeys(skills_list))
-                    logger.info(f"🛠️ Found {len(skills_list)} skills via expanded view: {skills_list[:10]}...")
-                    return skills_list[:30]  # Limit to 30 skills
+                    logger.info(f"🛠️ Extracted {len(skills_list)} skills total")
+                    return skills_list
+                else:
+                    logger.warning("⚠️ No skills found on dedicated page")
                     
             except Exception as e:
-                logger.debug(f"Skills expanded view method failed: {e}")
+                logger.error(f"❌ Skills extraction failed: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
             
-            # Method 2: Look for skills in the current page without expansion
-            try:
-                page_source = driver.page_source
-                soup = BeautifulSoup(page_source, "html.parser")
-                
-                # Look for visible skills before expansion
-                visible_skills = []
-                
-                # Find skills section
-                skills_section = soup.find("section", string=lambda text: text and "skills" in text.lower())
-                if not skills_section:
-                    # Try to find by heading
-                    skills_headings = soup.find_all(["h2", "h3", "span"], string=lambda text: text and "skills" in text.lower())
-                    if skills_headings:
-                        skills_section = skills_headings[0].find_parent("section")
-                
-                if skills_section:
-                    # Extract all text from the skills section
-                    all_text = skills_section.get_text(separator="\n", strip=True)
-                    lines = [line.strip() for line in all_text.split("\n") if line.strip()]
-                    
-                    for line in lines:
-                        # Skip headers and common text
-                        if line.lower() in ['skills', 'show all skills', 'endorsed', 'connections']:
-                            continue
-                        
-                        # Look for skill-like text
-                        if 2 <= len(line) <= 50 and not any(char in line for char in ['(', ')', '[', ']', '{', '}']):
-                            if not any(word in line.lower() for word in ['show', 'all', 'endorsed', 'connections', 'profile', 'view', 'more']):
-                                visible_skills.append(line)
-                
-                if visible_skills:
-                    # Remove duplicates while preserving order
-                    visible_skills = list(dict.fromkeys(visible_skills))
-                    logger.info(f"🛠️ Found {len(visible_skills)} visible skills: {visible_skills}")
-                    return visible_skills[:20]  # Limit to 20 skills
-                    
-            except Exception as e:
-                logger.debug(f"Visible skills method failed: {e}")
-            
-            logger.info("🛠️ No skills found with any method")
             return []
             
         except Exception as e:
             logger.warning(f"❌ Error in skills section: {e}")
-            return []
-        except Exception as e:
-            logger.warning(f"❌ Error in licenses section: {e}")
+            import traceback
+            logger.warning(traceback.format_exc())
             return []
     
     def scrape_profile(self, profile_url):
@@ -873,13 +676,29 @@ class LinkedInScraper:
             
             # Comprehensive scrolling to load all content
             logger.info("🔄 Scrolling to load all profile content...")
-            for i in range(8):  # More thorough scrolling
+            logger.info("📜 Scroll 1/3: Loading top sections...")
+            for i in range(4):  # Scroll to 50%
                 driver.execute_script(f"window.scrollTo(0, document.body.scrollHeight * {(i+1)/8});")
-                sleep(2)  # Wait longer between scrolls
+                sleep(2)
             
-            # Scroll back to top
-            driver.execute_script("window.scrollTo(0, 0);")
-            sleep(2)
+            logger.info("📜 Scroll 2/3: Loading middle sections...")
+            for i in range(4, 6):  # Scroll to 75%
+                driver.execute_script(f"window.scrollTo(0, document.body.scrollHeight * {(i+1)/8});")
+                sleep(2)
+            
+            logger.info("📜 Scroll 3/3: Loading bottom sections (Projects, Skills)...")
+            for i in range(6, 10):  # Scroll to 100% and beyond
+                driver.execute_script(f"window.scrollTo(0, document.body.scrollHeight * {(i+1)/8});")
+                sleep(3)  # Wait longer for bottom sections
+            
+            # Scroll to absolute bottom
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            sleep(3)
+            logger.info("✅ Finished scrolling - all content should be loaded")
+            
+            # DON'T scroll back to top - keep the page scrolled so content stays loaded
+            # driver.execute_script("window.scrollTo(0, 0);")
+            # sleep(2)
             
             page_source = driver.page_source
             soup = BeautifulSoup(page_source, "html.parser")  # Use html.parser for better compatibility
@@ -1015,28 +834,49 @@ class LinkedInScraper:
             # Extract about section with new LinkedIn structure
             about = None
             try:
-                # Try to click "show more" button first
+                # First, try to find and click the "see more" button in About section
                 try:
-                    show_more_buttons = driver.find_elements(By.CSS_SELECTOR, "button[aria-expanded='false']")
-                    for button in show_more_buttons:
-                        if "more" in button.text.lower():
-                            button.click()
-                            sleep(2)
-                            break
-                except:
-                    pass
+                    logger.info("📝 Looking for 'see more' button in About section...")
+                    
+                    # Method 1: Find button with "see more" or "show more" text near About section
+                    see_more_buttons = driver.find_elements(By.XPATH, 
+                        "//section[contains(@class, 'summary') or contains(@data-section, 'summary')]//button[contains(translate(., 'SEEMOR', 'seemor'), 'see more') or contains(translate(., 'SHOWMOR', 'showmor'), 'show more')]"
+                    )
+                    
+                    if not see_more_buttons:
+                        # Method 2: Find any button with aria-expanded="false" near about text
+                        see_more_buttons = driver.find_elements(By.XPATH,
+                            "//div[contains(@class, 'inline-show-more-text')]//button[@aria-expanded='false']"
+                        )
+                    
+                    if not see_more_buttons:
+                        # Method 3: Find button with "...more" text
+                        see_more_buttons = driver.find_elements(By.XPATH,
+                            "//button[contains(., '...more') or contains(., 'see more')]"
+                        )
+                    
+                    if see_more_buttons:
+                        logger.info(f"✅ Found {len(see_more_buttons)} 'see more' button(s), clicking first one...")
+                        see_more_buttons[0].click()
+                        sleep(2)
+                        logger.info("✅ Clicked 'see more' button")
+                    else:
+                        logger.info("ℹ️ No 'see more' button found (text might already be expanded)")
+                        
+                except Exception as e:
+                    logger.debug(f"Could not click 'see more' button: {e}")
                 
-                # Refresh page source after clicking show more
+                # Refresh page source after clicking
                 page_source = driver.page_source
                 soup = BeautifulSoup(page_source, "html.parser")
                 
                 # Try multiple selectors for about section
                 about_selectors = [
-                    # New LinkedIn structure
-                    "section[data-section='summary'] div.display-flex.ph5.pv3",
-                    "div.display-flex.ph5.pv3",
-                    # Look for expandable text sections
+                    # New LinkedIn structure - expandable text
                     "span[data-testid='expandable-text-box']",
+                    # About section with display-flex
+                    "section[data-section='summary'] div.display-flex",
+                    "div.pv-about__summary-text",
                     # Fallback selectors
                     ".pv-about-section .pv-about__summary-text",
                     ".about-section .about-section__text"
@@ -1047,6 +887,9 @@ class LinkedInScraper:
                         about_elem = soup.select_one(selector)
                         if about_elem:
                             about_text = about_elem.get_text(strip=True)
+                            # Clean up the text - remove "...more" or "see more" artifacts
+                            about_text = about_text.replace('...more', '').replace('…more', '').strip()
+                            
                             if about_text and len(about_text) > 20:  # Ensure it's substantial content
                                 about = about_text
                                 logger.info(f"📝 Found about with selector '{selector}': {len(about)} characters")
@@ -1076,51 +919,39 @@ class LinkedInScraper:
                     
                     if headline_skills:
                         skills = headline_skills
-                        logger.info(f"�️ Extractedc {len(skills)} skills from headline: {skills}")
+                        logger.info(f"🛠️ Extracted {len(skills)} skills from headline: {skills}")
                         
             except Exception as e:
                 logger.debug(f"Skills headline extraction failed: {e}")
-            
-            # Try to scrape skills from the page if not found in headline
-            if not skills:
-                skills = self.scrape_skills(driver)
             
             # Extract sections
             tokens = self.get_experience_tokens(driver)
             experience = self.parse_experience_tokens(tokens) if tokens else []
             education = self.scrape_education(driver)
-            projects = self.scrape_projects(driver)
+            projects = self.scrape_projects(driver, profile_url)  # Pass profile_url
             licenses = self.scrape_licenses(driver)
             
-            # Extract skills from headline - simplified approach
-            skills = []
-            if headline and "Python" in headline:
-                # Manually extract known skills from Vraj's headline
-                known_skills = []
-                if "Python" in headline:
-                    known_skills.append("Python")
-                if "PHP" in headline:
-                    known_skills.append("PHP")
-                if "React" in headline:
-                    known_skills.append("React")
-                if "SQL" in headline:
-                    known_skills.append("SQL")
-                if "AI/ML" in headline:
-                    known_skills.append("AI/ML")
-                if "Cybersecurity" in headline:
-                    known_skills.append("Cybersecurity")
-                if ".NET" in headline:
-                    known_skills.append(".NET")
-                if "Full Stack" in headline:
-                    known_skills.append("Full Stack")
-                
-                skills = known_skills
-                logger.info(f"🛠️ Extracted {len(skills)} skills from headline: {skills}")
+            # Extract skills - use scrape_skills method
+            skills = self.scrape_skills(driver, profile_url)  # Pass profile_url
             
-            # Fallback: if no skills found, add some default ones based on the profile
+            # Fallback: if no skills found, try to extract from headline
             if not skills:
-                skills = ["Python", "PHP", "React", "SQL", "AI/ML", "Cybersecurity", ".NET", "Full Stack Developer"]
-                logger.info(f"🛠️ Using fallback skills: {skills}")
+                logger.info("🛠️ No skills scraped, trying to extract from headline...")
+                if headline:
+                    known_skills = []
+                    tech_keywords = ["Python", "PHP", "React", "SQL", "AI/ML", "Cybersecurity", ".NET", "Full Stack"]
+                    for keyword in tech_keywords:
+                        if keyword in headline:
+                            known_skills.append(keyword)
+                    
+                    if known_skills:
+                        skills = known_skills
+                        logger.info(f"🛠️ Extracted {len(skills)} skills from headline: {skills}")
+                
+                # Final fallback
+                if not skills:
+                    skills = []
+                    logger.info("🛠️ No skills found")
             
             profile_data = {
                 "name": name,
